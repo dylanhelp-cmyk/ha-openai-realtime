@@ -2,6 +2,17 @@
 
 All notable changes to this add-on. Newest first.
 
+## 0.6.1
+
+- Fix duplicate pipeline startup: the pipeline builder no longer schedules the
+  runner in the background. `Application.run()` starts it once, after event
+  handlers are installed. This prevents the add-on from binding its WebSocket
+  port twice and reporting `[Errno 98] address already in use` against itself.
+- Identify this add-on as the Dylan fork and use port `8081` by default.
+  Set the Voice PE firmware to `ws://<Home Assistant IP>:8081/`.
+- Update installation links to this fork. Existing installations of the original
+  add-on must switch repositories; see the repository README.
+
 ## 0.6.0
 
 > ⚠️ **This update has two parts — please update both:**

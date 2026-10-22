@@ -530,9 +530,8 @@ class WebSocketHandler:
         runner = PipelineRunner()
         task = PipelineTask(pipeline, idle_timeout_secs=None, cancel_on_idle_timeout=False)
         
-        # Start pipeline in background
-        asyncio.create_task(runner.run(task))
-        logger.info("✅ Pipeline started for WebSocket connection")
+        # Application.run() owns the runner lifecycle. Starting it here too
+        # runs the same transport twice and attempts to bind the port twice.
         logger.info("✅ Pipeline initialized successfully")
 
         # Wire the device "stop" interrupt. The serializer calls this when it

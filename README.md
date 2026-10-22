@@ -9,9 +9,9 @@
 > (the voice "brain"). It needs the custom Voice PE **firmware** to connect to it — the
 > stock Home Assistant voice pipeline won't talk to this add-on. You must set up both:
 > - 🧠 **Backend add-on** (this repo) — runs inside Home Assistant
-> - 🔌 **Device firmware** → **[xandervanerven/home-assistant-voice-pe](https://github.com/xandervanerven/home-assistant-voice-pe)** (flashed onto the Voice PE)
+> - 🔌 **Device firmware** → **[dylanhelp-cmyk/home-assistant-voice-pe](https://github.com/dylanhelp-cmyk/home-assistant-voice-pe)** (flashed onto the Voice PE)
 >
-> 📖 New here? The full **[INSTALL guide](https://github.com/xandervanerven/home-assistant-voice-pe/blob/main/INSTALL.md)** walks through both halves, step by step.
+> 📖 New here? The full **[INSTALL guide](https://github.com/dylanhelp-cmyk/home-assistant-voice-pe/blob/main/INSTALL.md)** walks through both halves, step by step.
 
 A Home Assistant **add-on** that turns a [Voice PE](https://www.home-assistant.io/voice-pe/)
 device into a low-latency voice assistant built on **OpenAI's Realtime API**
@@ -36,13 +36,13 @@ Home Assistant `voice_assistant` pipeline on the audio path.
   - [`CHANGELOG.md`](openai_realtime_voice_agent/CHANGELOG.md) — what changed per version.
 
 The **device firmware** lives in its own repository —
-**[xandervanerven/home-assistant-voice-pe](https://github.com/xandervanerven/home-assistant-voice-pe)**
+**[dylanhelp-cmyk/home-assistant-voice-pe](https://github.com/dylanhelp-cmyk/home-assistant-voice-pe)**
 (a custom `va_client` ESPHome component, specific to the Voice PE hardware).
 
 ## Install
 
 1. In Home Assistant, open **Settings → Add-ons → Add-on store → ⋮ → Repositories**
-   and add `https://github.com/xandervanerven/ha-openai-realtime`.
+   and add `https://github.com/dylanhelp-cmyk/ha-openai-realtime`.
 2. Install **OpenAI Realtime 2 Voice Agent**. It ships with no prebuilt `image:`,
    so Home Assistant builds it locally on first install (a few minutes on a Pi).
 3. Configure the add-on and flash the companion firmware — see
@@ -50,6 +50,24 @@ The **device firmware** lives in its own repository —
 
 (An optional GitHub Actions workflow can publish container images to ghcr.io; it
 isn't needed for a normal local-build install.)
+
+## Switching from the original add-on
+
+This fork's **0.6.1** release fixes duplicate pipeline startup. The add-on is
+named **OpenAI Realtime 2 Voice Agent (Dylan fork)** and defaults to port **8081**.
+Adding this repository does not update an add-on installed from another repository.
+
+1. Copy the original add-on's Configuration YAML to a private local note so you
+   can transfer your API key and settings.
+2. Stop the original add-on and turn off its **Start on boot** and **Watchdog**
+   toggles so it stays stopped.
+3. Add `https://github.com/dylanhelp-cmyk/ha-openai-realtime` in the add-on store's
+   **Repositories**, then install **OpenAI Realtime 2 Voice Agent (Dylan fork)**.
+4. Paste your saved configuration into the new add-on. Set
+   `websocket_port: 8081`, save, and start it.
+5. Keep the Voice PE's `va_url` at `ws://<Home Assistant IP>:8081/`.
+   The device reconnects automatically. Verify a device connection appears in
+   the new add-on's logs before removing the old add-on.
 
 ## How it works
 
@@ -74,6 +92,8 @@ client. Interrupt a reply with the **"stop"** word or the center button.
   like "stop" — just ask again.
 
 ## Credits
+
+- Based on **[xandervanerven/ha-openai-realtime](https://github.com/xandervanerven/ha-openai-realtime)**; original credits are retained below.
 
 - Forked from **[fjfricke/ha-openai-realtime](https://github.com/fjfricke/ha-openai-realtime)**.
 - Built on **[Pipecat](https://github.com/pipecat-ai/pipecat)**.

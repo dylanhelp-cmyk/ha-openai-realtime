@@ -1,5 +1,10 @@
 # OpenAI Realtime 2 Voice Agent
 
+> This is the Dylan fork (0.6.1), which fixes duplicate pipeline startup.
+> Its add-on defaults to port **8081**. Set the Voice PE's `va_url` to
+> `ws://<Home Assistant IP>:8081/`. For an existing installation, follow
+> [Switching from the original add-on](../README.md#switching-from-the-original-add-on).
+
 Talk to your home with **OpenAI's `gpt-realtime-2`** speech-to-speech model. This
 Home Assistant add-on runs the realtime voice session and bridges it to Home
 Assistant device control (via the official **MCP Server** integration) and optional
@@ -14,7 +19,7 @@ drop-in for the stock HA voice pipeline.
 
 > **You need both halves.** This add-on does nothing without the **Voice PE firmware**
 > that streams audio to it →
-> **[xandervanerven/home-assistant-voice-pe](https://github.com/xandervanerven/home-assistant-voice-pe)**.
+> **[dylanhelp-cmyk/home-assistant-voice-pe](https://github.com/dylanhelp-cmyk/home-assistant-voice-pe)**.
 
 ## What it does
 
@@ -32,17 +37,19 @@ drop-in for the stock HA voice pipeline.
 ## Quick start
 
 1. Add this repository to Home Assistant (Settings → Add-ons → Add-on Store → ⋮ →
-   **Repositories**): `https://github.com/xandervanerven/ha-openai-realtime`
+   **Repositories**): `https://github.com/dylanhelp-cmyk/ha-openai-realtime`
 2. Install **OpenAI Realtime 2 Voice Agent** and open its **Configuration** tab.
 3. Paste your **OpenAI API key**, install the HA **MCP Server** integration, expose
    a few entities to Assist, and **Start** the add-on.
 4. Flash the **Voice PE firmware** from
-   **[xandervanerven/home-assistant-voice-pe](https://github.com/xandervanerven/home-assistant-voice-pe)**
+   **[dylanhelp-cmyk/home-assistant-voice-pe](https://github.com/dylanhelp-cmyk/home-assistant-voice-pe)**
    (one-click adopt-and-update in ESPHome Builder; full steps in that repo).
 
 Full step-by-step instructions are on the **Documentation** tab (`DOCS.md`).
 
 ## Credits
+
+- Based on **[xandervanerven/ha-openai-realtime](https://github.com/xandervanerven/ha-openai-realtime)**; original credits are retained below.
 
 - Backend forked from **[fjfricke/ha-openai-realtime](https://github.com/fjfricke/ha-openai-realtime)** (Felix Fricke).
 - Firmware thin-client design based on **[maxmaxme/home-assistant-voice-pe](https://github.com/maxmaxme/home-assistant-voice-pe)**, a fork of **[esphome/home-assistant-voice-pe](https://github.com/esphome/home-assistant-voice-pe)** (Nabu Casa / ESPHome).
