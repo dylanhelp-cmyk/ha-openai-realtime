@@ -10,7 +10,7 @@ from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineTask
 from pipecat.services.openai.realtime.llm import OpenAIRealtimeLLMService
 from pipecat.transports.websocket.server import WebsocketServerTransport
-from app.mcp_service import HomeAssistantMCPService
+from app.mcp_service import HomeAssistantMCPService, discovery_instructions
 from app.phase_emitter import TURN_LIVENESS
 from app.disconnect_tool import get_disconnect_tool_definition, create_disconnect_tool_handler
 from app.web_search_tool import get_web_search_tool_definition, create_web_search_tool_handler
@@ -18,6 +18,7 @@ from app.audio_recording_service import AudioRecordingService
 from app.session_manager import SessionManager
 from app.websocket_handler import WebSocketHandler
 from app.media_player_output import HomeAssistantPlayback
+from app.live_audio import AudioHTTPServer
 
 # Configure logging
 logging.basicConfig(
@@ -420,12 +421,31 @@ class Application:
             raise ValueError("tts_output must be voice_pe or media_player")
         media_player_playback = None
         if tts_output == "media_player":
+            delivery = os.environ.get("TTS_DELIVERY", "buffered").strip()
+            audio_server = None
+            stream_base_url = os.environ.get("TTS_STREAM_BASE_URL", "").strip()
+            if stream_base_url:
+                audio_server = AudioHTTPServer(
+                    stream_base_url, int(os.environ.get("TTS_STREAM_PORT", "18082")))
             media_player_playback = HomeAssistantPlayback(
                 entity_id=os.environ.get("TTS_MEDIA_PLAYER", "").strip(),
                 token=os.environ.get("SUPERVISOR_TOKEN") or os.environ.get("LONGLIVED_TOKEN", ""),
                 announce=os.environ.get("TTS_ANNOUNCE", "true").lower() == "true",
+                audio_server=audio_server,
+                delivery=delivery,
+                completion_mode=os.environ.get("TTS_COMPLETION_MODE", "auto"),
+                start_allowance_ms=int(os.environ.get("TTS_START_ALLOWANCE_MS", "300")),
+                finish_grace_ms=int(os.environ.get("TTS_FINISH_GRACE_MS", "1500")),
+                state_poll_ms=int(os.environ.get("TTS_STATE_POLL_MS", "100")),
+                state_timeout_ms=int(os.environ.get("TTS_STATE_TIMEOUT_MS", "500")),
+                stream_prebuffer_ms=int(os.environ.get("TTS_STREAM_PREBUFFER_MS", "120")),
+                stream_start_timeout_s=int(os.environ.get("TTS_STREAM_START_TIMEOUT_S", "10")),
             )
             try:
+                if audio_server is not None:
+                    await audio_server.start()
+                    logger.info("Audio HTTP listening on port %s; delivery=%s, completion=%s",
+                                audio_server.port, delivery, media_player_playback.completion_mode)
                 await media_player_playback.validate()
             except BaseException:
                 await media_player_playback.close()
@@ -596,6 +616,18 @@ class Application:
                 except Exception as e:
                     logger.warning(f"⚠️ Failed to fetch MCP tool definitions: {e}")
             
+            session_instructions = self.instructions
+            discovery_tool = next((tool["name"] for tool in all_tools
+                                   if tool.get("name", "").endswith("GetLiveContext")), None)
+            if discovery_tool:
+                catalog = ""
+                if os.environ.get("MCP_PRELOAD_CONTEXT", "true").lower() == "true":
+                    try:
+                        catalog = await self.mcp_service.get_device_catalog(discovery_tool)
+                    except Exception:
+                        logger.warning("Could not preload device catalog; live discovery tool remains available")
+                session_instructions += discovery_instructions(discovery_tool, catalog)
+
             # Turn detection: semantic_vad (recommended — semantic end-of-turn,
             # echo-resistant, doesn't cut the user off) or classic server_vad.
             if self.turn_detection_type == "semantic_vad":
@@ -651,7 +683,7 @@ class Application:
             )
 
             session_properties = SessionProperties(
-                instructions=self.instructions,
+                instructions=session_instructions,
                 # Cap the reply length: bounds runaway monologues + per-response
                 # output-token cost. None = unlimited (the API default "inf").
                 max_output_tokens=self.max_output_tokens,

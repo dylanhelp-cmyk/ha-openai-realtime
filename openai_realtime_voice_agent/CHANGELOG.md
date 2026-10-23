@@ -2,6 +2,24 @@
 
 All notable changes to this add-on. Newest first.
 
+## 0.8.0
+
+- Add optional progressive HTTP MP3 delivery: the speaker can start while
+  OpenAI is still generating audio. Buffered delivery remains available.
+- Serve fresh, temporary audio URLs for chimes and replies. WiiM announcement
+  cache parameters no longer invalidate HA signatures on this HTTP path.
+  Prevent previous assistant URLs from being restored as music.
+- Anchor completion timing to the speaker's real HTTP fetch instead of delayed
+  HA state. Expose delivery, prebuffer, completion, polling, timeout and speaker
+  startup margins in Configuration; retain existing microphone delay controls.
+- Optionally preload Assist device context once at connection, with a reconnect
+  cache and direct control for known names. No required search before each action.
+- Preserve structured MCP results and explicit tool errors, including exceptions
+  that previously lost the result callback in Pipecat 0.0.97.
+- Test progressive delivery with real ffmpeg/HTTP, fresh announcement URLs,
+  cancellation, fetch-based microphone timing, and MCP failures/results.
+- No new firmware required; use existing Voice PE firmware 1.3.0+.
+
 ## 0.7.2
 
 - Fix whole replies being silently discarded when input transcription is enabled.

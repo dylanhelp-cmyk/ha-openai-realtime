@@ -69,7 +69,7 @@ Adding this repository does not update an add-on installed from another reposito
    The device reconnects automatically. Verify a device connection appears in
    the new add-on's logs before removing the old add-on.
 
-## Choose a speaker for replies and wake chimes (0.7.1+)
+## Choose a speaker for replies and wake chimes (0.8.0+)
 
 Keep wake-word detection and the microphone on the Voice PE, and optionally
 send the original OpenAI voice to a Home Assistant media player. In the add-on
@@ -79,21 +79,26 @@ Configuration, set:
 tts_output: media_player
 tts_media_player: media_player.living_room
 tts_announce: true
+tts_delivery: stream
+tts_stream_base_url: http://192.168.1.100:18082
+tts_stream_port: 18082
+tts_completion_mode: auto
 ```
 
-Use your speaker's entity ID, then save and restart the add-on. Keep your
+Use your speaker's entity ID and **your Home Assistant LAN IP** in the URL,
+then save and restart the add-on. Keep your
 working device port unchanged. For wake sounds on that same speaker, also
 install firmware **1.3.0+** from the companion fork using ESPHome Builder.
-The Voice PE waits for the remote chime to finish before listening. External
-playback buffers audio first and adds some delay. The player must support
-local MP3 playback through HA's Media source; announcement/music restoration
-depends on its integration. Set `tts_output: voice_pe` to switch back.
-For the **WiiM Audio integration**, use **`tts_announce: false`**. Its
-announcement path adds a cache parameter to Home Assistant's signed audio URL,
-which invalidates authorization. This can switch the input to URL Stream while
-both chimes and replies remain silent. Ordinary playback avoids that path;
-it replaces the current music. Use add-on **0.7.2+** for the late-transcript
-interruption fix as well.
+The Voice PE waits for the remote chime before listening. Streaming sends MP3
+audio while OpenAI is still generating it; the player must support HTTP MP3
+streams. Its internal buffering can still add delay. All playback and microphone
+timings are adjustable on the Configuration tab. `buffered` delivery is available
+for players that require a complete file. Set `tts_output: voice_pe` to switch back.
+
+For **WiiM Audio announcements**, configure the Audio HTTP address as above.
+Fresh per-turn paths avoid its cache parameter breaking HA's signed media URLs.
+Previous assistant audio is not restored as music. Music resume/ducking still
+depends on the integration and the source that was playing.
 See [the output guide](openai_realtime_voice_agent/DOCS.md#play-replies-on-another-speaker)
 for requirements, timing, and troubleshooting.
 

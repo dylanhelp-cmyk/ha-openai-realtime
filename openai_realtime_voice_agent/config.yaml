@@ -1,5 +1,5 @@
 name: OpenAI Realtime 2 Voice Agent (Dylan fork)
-version: "0.7.2"
+version: "0.8.0"
 slug: openai_realtime_voice_agent
 description: Talk to your home with OpenAI gpt-realtime-2 — a voice agent for the Home Assistant Voice PE, with live device control and web search.
 url: https://github.com/dylanhelp-cmyk/ha-openai-realtime
@@ -94,6 +94,16 @@ options:
   tts_output: "voice_pe"
   tts_media_player: ""
   tts_announce: true
+  tts_delivery: "buffered"
+  tts_stream_base_url: ""
+  tts_stream_port: 18082
+  tts_stream_prebuffer_ms: 120
+  tts_stream_start_timeout_s: 10
+  tts_completion_mode: "auto"
+  tts_start_allowance_ms: 300
+  tts_finish_grace_ms: 1500
+  tts_state_poll_ms: 100
+  tts_state_timeout_ms: 500
   # 150 (not 0): cushions WS jitter so the speaker doesn't run dry mid-word
   # (the start-of-reply crackle); costs 150 ms of reply latency.
   playback_prebuffer_ms: 150
@@ -103,6 +113,7 @@ options:
   ha_mcp_url: ""
   longlived_token: ""
   mcp_tool_allowlist: ""
+  mcp_preload_context: true
 
   # --- ⚙️ Advanced ---
   websocket_port: 8081
@@ -141,12 +152,23 @@ schema:
   tts_output: "list(voice_pe|media_player)"
   tts_media_player: str
   tts_announce: bool
+  tts_delivery: "list(buffered|stream)"
+  tts_stream_base_url: str
+  tts_stream_port: port
+  tts_stream_prebuffer_ms: int(0,3000)
+  tts_stream_start_timeout_s: int(1,12)
+  tts_completion_mode: "list(auto|duration|state)"
+  tts_start_allowance_ms: int(0,5000)
+  tts_finish_grace_ms: int(0,10000)
+  tts_state_poll_ms: int(20,2000)
+  tts_state_timeout_ms: int(100,5000)
   playback_prebuffer_ms: int(0,2000)
   noise_reduction: "list(off|near_field|far_field)"
   # --- 🏠 Home Assistant ---
   ha_mcp_url: str
   longlived_token: password
   mcp_tool_allowlist: str
+  mcp_preload_context: bool
   # --- ⚙️ Advanced ---
   websocket_port: int(1024,65535)
   session_reuse_timeout_seconds: int(0,3600)

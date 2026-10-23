@@ -68,6 +68,16 @@ export WEB_SEARCH_MODEL
 export TTS_OUTPUT
 export TTS_MEDIA_PLAYER
 export TTS_ANNOUNCE
+# New tuning options use Python defaults until Supervisor has populated them.
+for option in tts_delivery tts_stream_base_url tts_stream_port \
+    tts_stream_prebuffer_ms tts_stream_start_timeout_s tts_completion_mode \
+    tts_start_allowance_ms tts_finish_grace_ms tts_state_poll_ms \
+    tts_state_timeout_ms mcp_preload_context; do
+    if bashio::config.has_value "$option"; then
+        option_env="$(printf '%s' "$option" | tr '[:lower:]' '[:upper:]')"
+        export "$option_env=$(bashio::config "$option")"
+    fi
+done
 export PLAYBACK_PREBUFFER_MS
 export NOISE_REDUCTION
 export LONGLIVED_TOKEN

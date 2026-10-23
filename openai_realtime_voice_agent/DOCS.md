@@ -1,7 +1,7 @@
 # OpenAI Realtime 2 Voice Agent — Documentation
 
-> This is the Dylan fork (0.7.2), with selectable speech output, external wake chimes,
-> and the duplicate-start fix.
+> This is the Dylan fork (0.8.0), with live audio for network speakers,
+> adjustable playback timing, and cached Assist device discovery.
 > Its add-on defaults to port **8081**. Set the Voice PE's `va_url` to
 > `ws://<Home Assistant IP>:8081/`. For an existing installation, follow
 > [Switching from the original add-on](../README.md#switching-from-the-original-add-on).
@@ -110,17 +110,23 @@ answer back.
 
 ### Play replies on another speaker
 
-Update the add-on to **0.7.2** or later, then open **Configuration → Edit in YAML**
+Update the add-on to **0.8.0** or later, then open **Configuration → Edit in YAML**
 and add or change these options alongside your existing settings:
 
 ```yaml
 tts_output: media_player
 tts_media_player: media_player.living_room
 tts_announce: true
+tts_delivery: stream
+tts_stream_base_url: http://192.168.1.100:18082
+tts_stream_port: 18082
+tts_completion_mode: auto
 ```
 
 Replace `media_player.living_room` with the exact entity ID of your speaker
-(find it in **Developer tools → States**). Save and restart the add-on. Keep
+(find it in **Developer tools → States**). Replace the IP in the audio URL with
+**your Home Assistant LAN IP**, reachable by the speaker. Use a free port,
+and use the same number in both HTTP options. Save and restart the add-on. Keep
 your working `websocket_port` and Voice PE `va_url` unchanged. Spoken replies
 go only to the selected speaker. The Voice PE continues to handle wake words,
 microphone and LEDs.
@@ -141,20 +147,24 @@ chime while benefiting from the 0.7.1 silent-reply fix. If you switch back to
 
 - The original OpenAI speech is encoded as MP3; the configured voice and speed
   still apply. This does not call another TTS provider or regenerate the reply.
-- Each audio response is buffered before playback, which adds delay compared
-  with streaming directly to the Voice PE. Reply segments play in order.
+- `tts_delivery: stream` progressively encodes and serves MP3 while OpenAI is
+  still generating the reply. This removes the wait for a complete response;
+  the speaker's network and playback buffers still affect latency. Raw Realtime
+  WebSocket PCM cannot be passed directly to an HTTP media player.
+- `tts_delivery: buffered` waits for each complete audio segment and remains
+  the default for compatibility. It can use the same Audio HTTP address, so
+  WiiM announcement fixes also work without live streaming.
 - `tts_announce: true` requests an announcement. Players that support it may
   restore their music afterward. Set it to `false` for ordinary playback, which
   replaces the current media. Music restore/ducking depends on the integration.
-- **WiiM Audio integration:** set **`tts_announce: false`**. Its announcement
-  handler appends a cache-busting query parameter after Home Assistant signs
-  the media URL. Home Assistant rejects that modified URL, so the WiiM may
-  switch to URL Stream while both the wake chime and full reply stay silent.
-  Ordinary playback avoids the added parameter and replaces the current music.
-- The Voice PE stays in its replying phase until player completion. If the
-  integration does not expose announcement playback state, the add-on uses the
-  reply's duration plus a three-second start allowance. Very slow players may
-  need follow-up listening disabled (`follow_up_listen_seconds: 0`).
+- **WiiM Audio integration:** use the Audio HTTP address for announcements.
+  Its added cache parameter cannot invalidate these per-turn URLs, unlike HA's
+  signed media-source URLs. Each chime/reply gets a fresh path. When the previous
+  item is an assistant URL, ordinary playback prevents it being resumed as music.
+- `auto` completion with Audio HTTP uses the actual speaker GET, audio duration
+  and an adjustable startup allowance. It avoids waiting for delayed HA state
+  updates. This is an estimate of audible completion, so tune the allowance
+  for your speaker. Choose `state` to use HA state with a bounded fallback.
 - "Stop" or the center button cancels pending replies and requests
   `media_player.media_stop` for active external playback. It does not stop
   unrelated music when no reply is active. The player must support stopping.
@@ -164,19 +174,43 @@ chime while benefiting from the 0.7.1 silent-reply fix. If you switch back to
 - To switch speakers, change `tts_media_player` and restart the add-on. To
   return speech to the device, set `tts_output: voice_pe` and restart.
 
-The target must support playing **local MP3 media through Home Assistant's
-Media source integration**. A Spotify-only player cannot play arbitrary reply
-files. Media source is normally enabled by `default_config`; if you removed
-it, add `media_source:` to Home Assistant's `configuration.yaml` and restart
-Home Assistant. The add-on shares `/media` with Core and temporarily writes
-replies to `/media/openai_realtime_voice_agent/`. Its files are removed after
-playback with a short grace period. If you customised `homeassistant.media_dirs`,
-ensure the `local` directory still maps to `/media`.
+The target must support HTTP MP3 playback; Spotify-only entities cannot play
+arbitrary reply audio. Audio HTTP serves only generated audio at unpredictable
+temporary paths, without forwarding HA credentials. Files expire 60 seconds
+after playback. Keep this port on your LAN. A fetch timeout means the speaker
+could not reach the configured IP/port; it is not an intentional playback delay.
 
-The speaker must be able to reach Home Assistant's media URL. If the add-on
-logs a playback request but nothing is heard, first try playing a local MP3
-on that entity from HA's **Media** browser. Check your Home Assistant local
-network URL and the speaker's network access if that also fails.
+With Audio HTTP empty, buffered mode uses HA's Media source integration and
+shared `/media` directory as before. `media_source:` must be enabled and the
+`local` media directory must map to `/media`. For WiiM, keep announcements off
+on this legacy signed-URL path.
+
+### External speaker timing
+
+All values below are editable on the Configuration tab. Save and restart.
+
+| Option | Default | What to tune |
+| --- | --- | --- |
+| `tts_stream_prebuffer_ms` | 120 | Audio collected before requesting live playback. Lower starts sooner; raise for stuttering. |
+| `tts_start_allowance_ms` | 300 | Speaker startup/buffer margin for chimes and replies. Raise if the mic opens before sound ends; lower if it opens late. |
+| `wake_open_delay_ms` | 700 | Echo guard after the wake chime. Try 150–300 for a quick external speaker. |
+| `follow_up_open_delay_ms` | 700 | Echo guard after the reply. Try 150–300; raise if it hears its own tail. |
+| `phase_idle_debounce_ms` | 1500 | Quiet margin before the idle phase. Try 150–300; raise if it returns to idle between reply segments. |
+| `tts_completion_mode` | auto | Real HTTP fetch plus duration when configured; `state` polls HA; `duration` always uses duration. |
+| `tts_finish_grace_ms` | 1500 | Maximum extra completion wait in state mode. Does not affect HTTP auto timing. |
+| `tts_state_poll_ms` | 100 | Poll interval in state mode; faster polling cannot make the integration refresh faster. |
+| `tts_state_timeout_ms` | 500 | Limit for a single state poll. |
+| `tts_stream_start_timeout_s` | 10 | Failure timeout for fetching audio, not extra delay on successful playback. |
+
+### Device lookup without a search before every command
+
+`mcp_preload_context: true` reads the existing Assist-exposed device catalogue
+once when the voice session connects, with a 60-second reconnect cache. It adds
+startup work and model context, but no mandatory catalogue call to each control
+request. Known names go straight to the control tools; unknown names or lookup
+errors can trigger discovery. Turn it off for on-demand discovery only. No
+additional entities are exposed. MCP errors and structured-only responses are
+preserved so the model can distinguish a failed lookup from a successful action.
 
 ### Other settings
 

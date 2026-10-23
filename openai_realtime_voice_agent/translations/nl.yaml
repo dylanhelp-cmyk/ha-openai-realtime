@@ -136,15 +136,15 @@ configuration:
     description: >-
       "voice_pe" speelt antwoorden op de Voice PE af. "media_player" stuurt
       dezelfde OpenAI-stem naar de hieronder gekozen Home Assistant-speaker.
-      Extern afspelen buffert elk antwoord eerst en geeft wat extra vertraging.
+      Kies hieronder stream om tijdens het genereren al te beginnen met afspelen.
       Herstart de add-on na een wijziging. Firmware 1.3.0+ verplaatst ook het
       wake-geluid naar die speaker en wacht voordat de microfoon opengaat.
   tts_media_player:
     name: "🎚️ Audio · Mediaspeler voor spraak"
     description: >-
       Entity-ID van de speaker voor "media_player", bijvoorbeeld
-      media_player.woonkamer. De speler moet lokale MP3-bestanden via Home
-      Assistants mediabron kunnen afspelen. Alleen Spotify werkt niet.
+      media_player.woonkamer. De speler moet HTTP-MP3-audio of lokale bestanden
+      via Home Assistants mediabron kunnen afspelen. Alleen Spotify werkt niet.
       Laat leeg bij "voice_pe".
   tts_announce:
     name: "🎚️ Audio · Spraak als aankondiging"
@@ -152,8 +152,69 @@ configuration:
       Vraag afspelen als aankondiging aan, zodat ondersteunde spelers hun
       vorige muziek hervatten. Ondersteuning hangt af van de integratie.
       Uit gebruikt normaal afspelen en vervangt de huidige media.
-      Houd uit voor WiiM Audio: de aankondigingsmodus kan beveiligde audio-URL's
-      ongeldig maken, waardoor zowel het weksignaal als het antwoord stil blijven.
+      Stel voor WiiM Audio hieronder het Audio-HTTP-adres in. Vorige antwoorden
+      van de assistent worden vervangen en niet als muziek hervat.
+  tts_delivery:
+    name: "Audio · Externe levering"
+    description: >-
+      stream begint met afspelen terwijl OpenAI het antwoord nog genereert.
+      buffered wacht op elk compleet audiosegment. Stream vereist een
+      Audio-HTTP-adres. Sla op en herstart na wijzigingen.
+  tts_stream_base_url:
+    name: "Audio · Audio-HTTP-adres"
+    description: >-
+      Adres waarop de speaker audio ophaalt, bijvoorbeeld
+      http://192.168.1.100:18082 met JOUW Home Assistant-LAN-IP.
+      Gebruik dezelfde poort als hieronder en voor WiiM een IP in plaats van
+      een .local-hostnaam. Leeg gebruikt de oorspronkelijke HA-mediabron.
+      Werkt met zowel stream als buffered.
+  tts_stream_port:
+    name: "Audio · Audio-HTTP-poort"
+    description: >-
+      Vrije poort voor tijdelijke audio op je netwerk (standaard 18082).
+      Gebruik hetzelfde nummer in het Audio-HTTP-adres. Dit is niet de
+      bestaande apparaatpoort van de Voice PE.
+  tts_stream_prebuffer_ms:
+    name: "Audio · Streambuffer (ms)"
+    description: >-
+      Gecodeerde audio verzameld voordat live afspelen wordt aangevraagd.
+      Begin met 120. Lager start eerder; verhoog naar 250–500 bij haperingen.
+      Deze buffer geldt voor externe speakers, niet voor de Voice PE.
+  tts_stream_start_timeout_s:
+    name: "Audio · Ophaaltime-out (seconden)"
+    description: >-
+      Maximale wachttijd totdat de speaker de audio-URL ophaalt. Dit is een
+      fouttime-out, geen extra vertraging bij normaal afspelen. Controleer bij
+      een time-out of het Audio-HTTP-adres en de poort bereikbaar zijn.
+  tts_completion_mode:
+    name: "Audio · Einde van afspelen"
+    description: >-
+      auto gebruikt met Audio HTTP de echte ophaaltijd en audioduur, zodat
+      trage HA-statusupdates geen extra wachttijd geven. duration gebruikt
+      altijd de duur. state gebruikt de HA-status met begrensde wachttijd.
+      Begin voor WiiM met auto en stel de opstartmarge af.
+  tts_start_allowance_ms:
+    name: "Audio · Opstartmarge speaker (ms)"
+    description: >-
+      Extra marge voor de interne speakerbuffer boven op de audioduur.
+      Begin met 300. Verlaag als de microfoon laat opent; verhoog als er dan
+      nog audio klinkt. Geldt voor het weksignaal en gesproken antwoorden.
+  tts_finish_grace_ms:
+    name: "Audio · Extra eindmarge (ms)"
+    description: >-
+      Maximale extra wachttijd voor een eindstatus van HA in state-modus
+      (standaard 1500). Heeft geen invloed op de HTTP-duurklok in auto-modus.
+  tts_state_poll_ms:
+    name: "Audio · Statusinterval (ms)"
+    description: >-
+      Interval tussen HA-statuscontroles (standaard 100). Een korter interval
+      laat de integratie zelf niet sneller verversen. Auto met Audio HTTP
+      vermijdt deze controles en de bijbehorende vertraging.
+  tts_state_timeout_ms:
+    name: "Audio · Time-out statusverzoek (ms)"
+    description: >-
+      Limiet per HA-statusverzoek (standaard 500), zodat een traag verzoek de
+      microfoon niet meerdere seconden ophoudt.
   playback_prebuffer_ms:
     name: "🎚️ Audio · Afspeelbuffer (ms)"
     description: >-
@@ -191,6 +252,14 @@ configuration:
       gebruiken; leeg = allemaal. Met de ingebouwde MCP-server kun je dit
       leeg laten. Vooral nuttig met de ha-mcp-add-on (80+ tools) om gesprekken
       snel en goedkoop te houden.
+  mcp_preload_context:
+    name: "Home Assistant · Apparaatnamen vooraf laden"
+    description: >-
+      Lees de bestaande Assist-apparatencatalogus bij het verbinden, zodat
+      bekende namen rechtstreeks naar de besturingstools gaan. Er is geen
+      verplichte zoekactie per opdracht. Alleen onbekende of dubbelzinnige
+      namen en mislukte zoekacties vereisen nieuwe ontdekking. Er worden geen
+      extra entiteiten blootgesteld. Uit gebruikt alleen zoeken op aanvraag.
 
   # --- ⚙️ Geavanceerd ---
   websocket_port:
