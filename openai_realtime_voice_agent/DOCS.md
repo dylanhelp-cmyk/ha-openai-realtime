@@ -1,6 +1,6 @@
 # OpenAI Realtime 2 Voice Agent — Documentation
 
-> This is the Dylan fork (0.6.1), which fixes duplicate pipeline startup.
+> This is the Dylan fork (0.7.0), with selectable speech output and the duplicate-start fix.
 > Its add-on defaults to port **8081**. Set the Voice PE's `va_url` to
 > `ws://<Home Assistant IP>:8081/`. For an existing installation, follow
 > [Switching from the original add-on](../README.md#switching-from-the-original-add-on).
@@ -106,6 +106,56 @@ answer back.
   won't crash the session, so you can change `web_search_model` and retry.
 
 ## 6. Options reference & tuning
+
+### Play replies on another speaker
+
+Update the add-on to **0.7.0** or later, then open **Configuration → Edit in YAML**
+and add or change these options alongside your existing settings:
+
+```yaml
+tts_output: media_player
+tts_media_player: media_player.living_room
+tts_announce: true
+```
+
+Replace `media_player.living_room` with the exact entity ID of your speaker
+(find it in **Developer tools → States**). Save and restart the add-on. Keep
+your working `websocket_port` and Voice PE `va_url` unchanged. **No firmware
+update is needed.** The Voice PE continues to handle wake words, microphone,
+LEDs, and local chimes; spoken replies go only to the selected speaker.
+
+- The original OpenAI speech is encoded as MP3; the configured voice and speed
+  still apply. This does not call another TTS provider or regenerate the reply.
+- Each audio response is buffered before playback, which adds delay compared
+  with streaming directly to the Voice PE. Reply segments play in order.
+- `tts_announce: true` requests an announcement. Players that support it may
+  restore their music afterward. Set it to `false` for ordinary playback, which
+  replaces the current media. Music restore/ducking depends on the integration.
+- The Voice PE stays in its replying phase until player completion. If the
+  integration does not expose announcement playback state, the add-on uses the
+  reply's duration plus a three-second start allowance. Very slow players may
+  need follow-up listening disabled (`follow_up_listen_seconds: 0`).
+- "Stop" or the center button cancels pending replies and requests
+  `media_player.media_stop` for active external playback. It does not stop
+  unrelated music when no reply is active. The player must support stopping.
+- To switch speakers, change `tts_media_player` and restart the add-on. To
+  return speech to the device, set `tts_output: voice_pe` and restart.
+
+The target must support playing **local MP3 media through Home Assistant's
+Media source integration**. A Spotify-only player cannot play arbitrary reply
+files. Media source is normally enabled by `default_config`; if you removed
+it, add `media_source:` to Home Assistant's `configuration.yaml` and restart
+Home Assistant. The add-on shares `/media` with Core and temporarily writes
+replies to `/media/openai_realtime_voice_agent/`. Its files are removed after
+playback with a short grace period. If you customised `homeassistant.media_dirs`,
+ensure the `local` directory still maps to `/media`.
+
+The speaker must be able to reach Home Assistant's media URL. If the add-on
+logs a playback request but nothing is heard, first try playing a local MP3
+on that entity from HA's **Media** browser. Check your Home Assistant local
+network URL and the speaker's network access if that also fails.
+
+### Other settings
 
 Every option has a description on the **Configuration** tab. The ones worth knowing:
 

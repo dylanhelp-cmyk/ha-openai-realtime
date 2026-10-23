@@ -131,6 +131,26 @@ configuration:
       web_search-tool ondersteunt. (Standaard verborgen.)
 
   # --- 🎚️ Audio ---
+  tts_output:
+    name: "🎚️ Audio · Spraakuitvoer"
+    description: >-
+      "voice_pe" speelt antwoorden op de Voice PE af. "media_player" stuurt
+      dezelfde OpenAI-stem naar de hieronder gekozen Home Assistant-speaker.
+      Extern afspelen buffert elk antwoord eerst en geeft wat extra vertraging.
+      Herstart de add-on na een wijziging; nieuwe firmware is niet nodig.
+  tts_media_player:
+    name: "🎚️ Audio · Mediaspeler voor spraak"
+    description: >-
+      Entity-ID van de speaker voor "media_player", bijvoorbeeld
+      media_player.woonkamer. De speler moet lokale MP3-bestanden via Home
+      Assistants mediabron kunnen afspelen. Alleen Spotify werkt niet.
+      Laat leeg bij "voice_pe".
+  tts_announce:
+    name: "🎚️ Audio · Spraak als aankondiging"
+    description: >-
+      Vraag afspelen als aankondiging aan, zodat ondersteunde spelers hun
+      vorige muziek hervatten. Ondersteuning hangt af van de integratie.
+      Uit gebruikt normaal afspelen en vervangt de huidige media.
   playback_prebuffer_ms:
     name: "🎚️ Audio · Afspeelbuffer (ms)"
     description: >-
@@ -232,3 +252,4 @@ configuration:
     description: >-
       Slaat microfoon- en speakeraudio op in bestanden binnen de add-on,
       alleen voor probleemanalyse. Normaal uit laten.
+

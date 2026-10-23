@@ -128,6 +128,26 @@ configuration:
       OpenAI's web_search tool. (Hidden by default.)
 
   # --- 🎚️ Audio ---
+  tts_output:
+    name: "🎚️ Audio · Speech output"
+    description: >-
+      "voice_pe" plays replies on the Voice PE as usual. "media_player"
+      sends the same OpenAI voice to the Home Assistant speaker selected below.
+      External playback buffers each reply first, so it adds some delay.
+      Restart the add-on after changing these settings; no firmware update needed.
+  tts_media_player:
+    name: "🎚️ Audio · Speech media player"
+    description: >-
+      Entity ID of the speaker to use when Speech output is "media_player",
+      for example media_player.living_room. The player must support playing
+      local MP3 files through Home Assistant's media source. Spotify-only
+      players cannot play these files. Leave blank when using "voice_pe".
+  tts_announce:
+    name: "🎚️ Audio · Play speech as announcement"
+    description: >-
+      Request announcement playback, so supported players can resume their
+      previous music afterward. Support depends on the player integration.
+      Turn off to use ordinary playback, which replaces the current media.
   playback_prebuffer_ms:
     name: "🎚️ Audio · Playback buffer (ms)"
     description: >-
@@ -228,3 +248,4 @@ configuration:
     description: >-
       Saves microphone and speaker audio to files inside the add-on, for
       troubleshooting only. Leave off normally.
+

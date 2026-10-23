@@ -14,6 +14,7 @@ python = ">=3.11,<3.14"
 # developed/tested against.
 pipecat-ai = {extras = ["mcp", "openai", "websocket"], version = "0.0.97"}
 python-dotenv = ">=1.0.0"
+aiohttp = ">=3.9,<4"
 fastapi = ">=0.100.0"
 uvicorn = {extras = ["standard"], version = ">=0.23.0"}
 websockets = ">=13.0"
@@ -24,3 +25,4 @@ start = "app.main:main"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+

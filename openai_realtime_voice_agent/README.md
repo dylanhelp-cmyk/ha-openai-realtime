@@ -1,6 +1,6 @@
 # OpenAI Realtime 2 Voice Agent
 
-> This is the Dylan fork (0.6.1), which fixes duplicate pipeline startup.
+> This is the Dylan fork (0.7.0), with selectable speech output and the duplicate-start fix.
 > Its add-on defaults to port **8081**. Set the Voice PE's `va_url` to
 > `ws://<Home Assistant IP>:8081/`. For an existing installation, follow
 > [Switching from the original add-on](../README.md#switching-from-the-original-add-on).

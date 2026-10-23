@@ -69,6 +69,26 @@ Adding this repository does not update an add-on installed from another reposito
    The device reconnects automatically. Verify a device connection appears in
    the new add-on's logs before removing the old add-on.
 
+## Choose a speaker for replies (0.7.0+)
+
+Keep wake-word detection and the microphone on the Voice PE, and optionally
+send the original OpenAI voice to a Home Assistant media player. In the add-on
+Configuration, set:
+
+```yaml
+tts_output: media_player
+tts_media_player: media_player.living_room
+tts_announce: true
+```
+
+Use your speaker's entity ID, then save and restart the add-on. Keep your
+working device port unchanged; no firmware update is required. External
+playback buffers audio first and adds some delay. The player must support
+local MP3 playback through HA's Media source; announcement/music restoration
+depends on its integration. Set `tts_output: voice_pe` to switch back.
+See [the output guide](openai_realtime_voice_agent/DOCS.md#play-replies-on-another-speaker)
+for requirements, timing, and troubleshooting.
+
 ## How it works
 
 ```

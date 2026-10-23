@@ -17,6 +17,7 @@ from app.web_search_tool import get_web_search_tool_definition, create_web_searc
 from app.audio_recording_service import AudioRecordingService
 from app.session_manager import SessionManager
 from app.websocket_handler import WebSocketHandler
+from app.media_player_output import HomeAssistantPlayback
 
 # Configure logging
 logging.basicConfig(
@@ -412,6 +413,25 @@ class Application:
         except Exception as e:
             logger.warning(f"⚠️ Failed to initialize Home Assistant MCP Client: {e}")
         
+        # Route the original generated speech to a configurable HA media player.
+        # The default keeps the existing device streaming path unchanged.
+        tts_output = os.environ.get("TTS_OUTPUT", "voice_pe").strip()
+        if tts_output not in {"voice_pe", "media_player"}:
+            raise ValueError("tts_output must be voice_pe or media_player")
+        media_player_playback = None
+        if tts_output == "media_player":
+            media_player_playback = HomeAssistantPlayback(
+                entity_id=os.environ.get("TTS_MEDIA_PLAYER", "").strip(),
+                token=os.environ.get("SUPERVISOR_TOKEN") or os.environ.get("LONGLIVED_TOKEN", ""),
+                announce=os.environ.get("TTS_ANNOUNCE", "true").lower() == "true",
+            )
+            try:
+                await media_player_playback.validate()
+            except BaseException:
+                await media_player_playback.close()
+                raise
+            logger.info("TTS output: %s", media_player_playback.entity_id)
+
         # Initialize WebSocket handler
         self.websocket_handler = WebSocketHandler(
             host=websocket_host,
@@ -422,6 +442,7 @@ class Application:
             follow_up_open_delay_ms=follow_up_open_delay_ms,
             wake_open_delay_ms=wake_open_delay_ms,
             playback_prebuffer_ms=playback_prebuffer_ms,
+            media_player_playback=media_player_playback,
         )
         logger.info(
             f"🔁 Follow-up window: {follow_up_listen_seconds}s "

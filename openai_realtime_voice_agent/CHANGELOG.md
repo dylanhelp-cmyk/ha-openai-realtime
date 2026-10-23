@@ -2,6 +2,22 @@
 
 All notable changes to this add-on. Newest first.
 
+## 0.7.0
+
+- Add selectable speech output: keep `tts_output: voice_pe` (default), or use
+  `media_player` with a `tts_media_player` entity ID. No firmware update needed.
+- Preserve the original OpenAI voice, encode replies as temporary MP3 media,
+  and play them via Home Assistant's Media source and `media_player.play_media`.
+  External playback buffers each audio response and adds some delay.
+- Add `tts_announce` to request announcement playback on supported players.
+- Keep Voice PE phases and follow-up listening tied to external playback;
+  use a duration guard for integrations without announcement state reporting.
+- Queue response segments in order; cancel active/queued external replies on
+  device stop, disconnect, and shutdown. Drop cancelled audio until a new turn.
+- Add routing, microphone timing, stop, failure recovery, real MP3 encoding,
+  temporary-file cleanup, and local Home Assistant HTTP contract tests.
+- Keep the existing device output and WebSocket port defaults unchanged.
+
 ## 0.6.1
 
 - Fix duplicate pipeline startup: the pipeline builder no longer schedules the

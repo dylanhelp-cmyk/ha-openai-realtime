@@ -24,6 +24,9 @@ ENABLE_WEB_SEARCH=$(bashio::config 'enable_web_search')
 WEB_SEARCH_MODEL=$(bashio::config 'web_search_model')
 
 # --- 🎚️ Audio ---
+TTS_OUTPUT=$(bashio::config 'tts_output')
+TTS_MEDIA_PLAYER=$(bashio::config 'tts_media_player')
+TTS_ANNOUNCE=$(bashio::config 'tts_announce')
 PLAYBACK_PREBUFFER_MS=$(bashio::config 'playback_prebuffer_ms')
 NOISE_REDUCTION=$(bashio::config 'noise_reduction')
 
@@ -62,6 +65,9 @@ export VAD_EAGERNESS
 export PHASE_IDLE_DEBOUNCE_MS
 export ENABLE_WEB_SEARCH
 export WEB_SEARCH_MODEL
+export TTS_OUTPUT
+export TTS_MEDIA_PLAYER
+export TTS_ANNOUNCE
 export PLAYBACK_PREBUFFER_MS
 export NOISE_REDUCTION
 export LONGLIVED_TOKEN
@@ -129,3 +135,4 @@ fi
 # Start the application
 export PYTHONUNBUFFERED=1
 exec python3 -m app.main
+

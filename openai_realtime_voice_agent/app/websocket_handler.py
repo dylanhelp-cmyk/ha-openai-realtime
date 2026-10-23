@@ -21,6 +21,7 @@ from app.raw_audio_serializer import RawAudioSerializer
 from app.session_manager import SessionManager
 from app.audio_recording_service import AudioRecordingService
 from app.phase_emitter import PhaseEmitter
+from app.media_player_output import HomeAssistantPlayback, MediaPlayerOutput
 from app.transcript_logger import TranscriptLogger
 
 logger = logging.getLogger(__name__)
@@ -338,6 +339,7 @@ class WebSocketHandler:
         follow_up_open_delay_ms: int = 700,
         wake_open_delay_ms: int = 700,
         playback_prebuffer_ms: int = 0,
+        media_player_playback: Optional[HomeAssistantPlayback] = None,
     ):
         """
         Initialize WebSocket handler.
@@ -365,6 +367,8 @@ class WebSocketHandler:
         self.follow_up_open_delay_ms = max(0, int(follow_up_open_delay_ms))
         self.wake_open_delay_ms = max(0, int(wake_open_delay_ms))
         self.playback_prebuffer_ms = max(0, int(playback_prebuffer_ms))
+        self.media_player_playback = media_player_playback
+        self.media_player_output: Optional[MediaPlayerOutput] = None
 
         self.transport: Optional[WebsocketServerTransport] = None
         self.pipeline: Optional[Pipeline] = None
@@ -512,6 +516,10 @@ class WebSocketHandler:
         if output_recorder:
             pipeline_components.append(output_recorder)
 
+        if self.media_player_playback is not None:
+            self.media_player_output = MediaPlayerOutput(self.media_player_playback)
+            pipeline_components.append(self.media_player_output)
+
         pipeline_components.append(transport.output())
         
         # Add context initializer if we have cached messages
@@ -605,6 +613,8 @@ class WebSocketHandler:
             # the 1.5 s time-window alone misses responses that land later —
             # OpenAI replying to the spoken "stop", or a slow tool's answer.
             _kill_next_response["v"] = True
+            if self.media_player_output is not None:
+                await self.media_player_output.interrupt()
             try:
                 await openai_service.send_client_event(openai_rt_events.InputAudioBufferClearEvent())
                 logger.info("🛑 device interrupt → input_audio_buffer.clear sent (drop in-flight user audio)")
@@ -692,6 +702,8 @@ class WebSocketHandler:
             # window and the post-tool flag so neither can cancel it.
             _interrupt_kill_until["t"] = 0.0
             _kill_next_response["v"] = False
+            if self.media_player_output is not None:
+                self.media_player_output.resume()
 
         phase_emitter.set_kill_window_handlers(
             on_dangling=lambda: _interrupt_kill_until.__setitem__(
@@ -752,6 +764,10 @@ class WebSocketHandler:
 
     async def broadcast_phase(self, value: str) -> None:
         """Send a va_client phase message to every connected device."""
+        # Recovery/watchdog forced idle must also discard partial external
+        # audio, so a later turn cannot play the abandoned reply's buffer.
+        if value == "idle" and self.media_player_output is not None and self.media_player_output.is_active:
+            await self.media_player_output.interrupt()
         # TEMP instrumentation: log the broadcast + how many device sockets we
         # think are connected (was debug).
         logger.info(f"➡️ broadcast phase '{value}' to {len(self._websockets)} device(s)")
@@ -803,6 +819,8 @@ class WebSocketHandler:
         async def on_client_disconnected(transport: WebsocketServerTransport, websocket, *args, **kwargs):
             """Handle client disconnection."""
             self._websockets.discard(websocket)
+            if self.media_player_output is not None:
+                await self.media_player_output.interrupt()
             client_id = self.extract_client_id(websocket)
             if client_id:
                 logger.info(f"🔌 Client {client_id} disconnected")
@@ -875,6 +893,10 @@ class WebSocketHandler:
     
     async def cleanup(self):
         """Cleanup WebSocket handler resources."""
+        if self.media_player_output is not None:
+            await self.media_player_output.interrupt()
+        if self.media_player_playback is not None:
+            await self.media_player_playback.close()
         if self.runner:
             try:
                 await self.runner.cancel()
