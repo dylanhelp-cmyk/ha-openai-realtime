@@ -4,10 +4,12 @@ Run from the add-on directory: python -m unittest discover -s tests -v
 """
 
 import asyncio
+import io
 from pathlib import Path
 import tempfile
 import time
 import unittest
+import wave
 from unittest.mock import AsyncMock
 
 from aiohttp import web
@@ -215,11 +217,14 @@ class PlaybackHTTPTests(unittest.IsolatedAsyncioTestCase):
         filename = data["media_content_id"].rsplit("/", 1)[1]
         encoded = self.media_dir / filename
         probe = await asyncio.create_subprocess_exec(
-            "ffprobe", "-v", "error", "-show_entries", "stream=codec_name,sample_rate,channels",
-            "-of", "json", str(encoded), stdout=asyncio.subprocess.PIPE)
+            "ffmpeg", "-v", "error", "-f", "mp3", "-i", str(encoded),
+            "-f", "wav", "pipe:1", stdout=asyncio.subprocess.PIPE)
         stdout, _ = await probe.communicate()
-        self.assertIn(b'"codec_name": "mp3"', stdout)
-        self.assertIn(b'"sample_rate": "24000"', stdout)
+        self.assertEqual(probe.returncode, 0)
+        with wave.open(io.BytesIO(stdout)) as decoded:
+            self.assertEqual(decoded.getframerate(), 24000)
+            self.assertEqual(decoded.getnchannels(), 1)
+            self.assertGreater(len(decoded.readframes(2400)), 0)
         await asyncio.sleep(0.03)
         self.assertFalse(task.done(), "must wait for actual player completion")
         self.state = {"state": "idle", "attributes": {}}

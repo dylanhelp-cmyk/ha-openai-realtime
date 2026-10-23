@@ -23,6 +23,7 @@ from app.audio_recording_service import AudioRecordingService
 from app.phase_emitter import PhaseEmitter
 from app.media_player_output import HomeAssistantPlayback, MediaPlayerOutput
 from app.wake_chime import ExternalWakeChime
+from app.server_vad_guard import ServerVADGuard
 from app.transcript_logger import TranscriptLogger
 
 logger = logging.getLogger(__name__)
@@ -472,6 +473,7 @@ class WebSocketHandler:
 
         pipeline_components = [
             transport.input(),
+            ServerVADGuard(),
             # Watch for OpenAI connection-death ErrorFrames (they travel upstream
             # to the task source, so place this upstream of the service) and
             # reconnect in place. Without it a 1011/1001 drop bricks the session.

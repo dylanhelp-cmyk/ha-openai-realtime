@@ -152,6 +152,8 @@ configuration:
       Vraag afspelen als aankondiging aan, zodat ondersteunde spelers hun
       vorige muziek hervatten. Ondersteuning hangt af van de integratie.
       Uit gebruikt normaal afspelen en vervangt de huidige media.
+      Houd uit voor WiiM Audio: de aankondigingsmodus kan beveiligde audio-URL's
+      ongeldig maken, waardoor zowel het weksignaal als het antwoord stil blijven.
   playback_prebuffer_ms:
     name: "🎚️ Audio · Afspeelbuffer (ms)"
     description: >-

@@ -2,6 +2,20 @@
 
 All notable changes to this add-on. Newest first.
 
+## 0.7.2
+
+- Fix whole replies being silently discarded when input transcription is enabled.
+  The generic context aggregator could turn a late OpenAI transcript into a
+  second, emulated speech interruption after the real server VAD turn had ended.
+  Keep OpenAI in charge of VAD and block only these upstream emulation requests.
+  Preserve transcripts, genuine speech events, device stop, and interruptions.
+- Add a real Pipecat input-transport regression covering final transcripts,
+  an initial reply, follow-up speech, and retained conversation history.
+- Document the WiiM Audio announcement workaround: set `tts_announce: false`.
+  Its announcement path appends a cache parameter to protected media URLs,
+  invalidating Home Assistant's signature and silencing both chimes and replies.
+- No companion firmware change is required; keep Voice PE firmware 1.3.0+.
+
 ## 0.7.1
 
 - Fix silent external replies: Pipecat's user-speech interruption could reach

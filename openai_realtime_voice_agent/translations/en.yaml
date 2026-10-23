@@ -149,6 +149,8 @@ configuration:
       Request announcement playback, so supported players can resume their
       previous music afterward. Support depends on the player integration.
       Turn off to use ordinary playback, which replaces the current media.
+      Keep off for WiiM Audio: its announcement mode can invalidate protected
+      audio URLs and make both wake chimes and spoken replies silent.
   playback_prebuffer_ms:
     name: "🎚️ Audio · Playback buffer (ms)"
     description: >-

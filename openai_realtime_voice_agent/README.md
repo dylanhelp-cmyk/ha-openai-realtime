@@ -1,6 +1,6 @@
 # OpenAI Realtime 2 Voice Agent
 
-> This is the Dylan fork (0.7.1), with selectable speech output, external wake chimes,
+> This is the Dylan fork (0.7.2), with selectable speech output, external wake chimes,
 > and the duplicate-start fix. External wake chimes require Voice PE firmware 1.3.0+.
 > Its add-on defaults to port **8081**. Set the Voice PE's `va_url` to
 > `ws://<Home Assistant IP>:8081/`. For an existing installation, follow

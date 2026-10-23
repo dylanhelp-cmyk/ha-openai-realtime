@@ -88,6 +88,12 @@ The Voice PE waits for the remote chime to finish before listening. External
 playback buffers audio first and adds some delay. The player must support
 local MP3 playback through HA's Media source; announcement/music restoration
 depends on its integration. Set `tts_output: voice_pe` to switch back.
+For the **WiiM Audio integration**, use **`tts_announce: false`**. Its
+announcement path adds a cache parameter to Home Assistant's signed audio URL,
+which invalidates authorization. This can switch the input to URL Stream while
+both chimes and replies remain silent. Ordinary playback avoids that path;
+it replaces the current music. Use add-on **0.7.2+** for the late-transcript
+interruption fix as well.
 See [the output guide](openai_realtime_voice_agent/DOCS.md#play-replies-on-another-speaker)
 for requirements, timing, and troubleshooting.
 

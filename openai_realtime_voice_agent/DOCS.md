@@ -1,6 +1,6 @@
 # OpenAI Realtime 2 Voice Agent — Documentation
 
-> This is the Dylan fork (0.7.1), with selectable speech output, external wake chimes,
+> This is the Dylan fork (0.7.2), with selectable speech output, external wake chimes,
 > and the duplicate-start fix.
 > Its add-on defaults to port **8081**. Set the Voice PE's `va_url` to
 > `ws://<Home Assistant IP>:8081/`. For an existing installation, follow
@@ -110,7 +110,7 @@ answer back.
 
 ### Play replies on another speaker
 
-Update the add-on to **0.7.1** or later, then open **Configuration → Edit in YAML**
+Update the add-on to **0.7.2** or later, then open **Configuration → Edit in YAML**
 and add or change these options alongside your existing settings:
 
 ```yaml
@@ -146,6 +146,11 @@ chime while benefiting from the 0.7.1 silent-reply fix. If you switch back to
 - `tts_announce: true` requests an announcement. Players that support it may
   restore their music afterward. Set it to `false` for ordinary playback, which
   replaces the current media. Music restore/ducking depends on the integration.
+- **WiiM Audio integration:** set **`tts_announce: false`**. Its announcement
+  handler appends a cache-busting query parameter after Home Assistant signs
+  the media URL. Home Assistant rejects that modified URL, so the WiiM may
+  switch to URL Stream while both the wake chime and full reply stay silent.
+  Ordinary playback avoids the added parameter and replaces the current music.
 - The Voice PE stays in its replying phase until player completion. If the
   integration does not expose announcement playback state, the add-on uses the
   reply's duration plus a three-second start allowance. Very slow players may
