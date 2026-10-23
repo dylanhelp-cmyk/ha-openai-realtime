@@ -134,7 +134,8 @@ configuration:
       "voice_pe" plays replies on the Voice PE as usual. "media_player"
       sends the same OpenAI voice to the Home Assistant speaker selected below.
       External playback buffers each reply first, so it adds some delay.
-      Restart the add-on after changing these settings; no firmware update needed.
+      Restart the add-on after changing these settings. Firmware 1.3.0+ also
+      moves wake chimes to that speaker and waits before opening the microphone.
   tts_media_player:
     name: "🎚️ Audio · Speech media player"
     description: >-

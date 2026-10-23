@@ -64,7 +64,7 @@ class RawAudioSerializer(FrameSerializer):
         self._on_mic_flush = handler
 
     def set_wake_handler(self, handler):
-        """Register the async no-arg callback fired on a device 'wake'."""
+        """Register the async callback(payload) fired on a device 'wake'."""
         self._on_wake = handler
 
     @property
@@ -130,7 +130,7 @@ class RawAudioSerializer(FrameSerializer):
                 logger.info("👋 device wake received")
                 if self._on_wake is not None:
                     try:
-                        await self._on_wake()
+                        await self._on_wake(data)
                     except Exception as e:
                         logger.warning(f"⚠️ device wake handler failed: {e!r}")
             # interrupt / ping / start / other control frames: nothing to inject.
@@ -168,4 +168,5 @@ class RawAudioSerializer(FrameSerializer):
         # For other frame types, return empty bytes (not serialized)
         logger.debug(f"📤 Serializing non-audio frame: {type(frame).__name__}, returning empty bytes")
         return b""
+
 

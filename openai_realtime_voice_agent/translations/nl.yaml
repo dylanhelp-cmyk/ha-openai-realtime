@@ -137,7 +137,8 @@ configuration:
       "voice_pe" speelt antwoorden op de Voice PE af. "media_player" stuurt
       dezelfde OpenAI-stem naar de hieronder gekozen Home Assistant-speaker.
       Extern afspelen buffert elk antwoord eerst en geeft wat extra vertraging.
-      Herstart de add-on na een wijziging; nieuwe firmware is niet nodig.
+      Herstart de add-on na een wijziging. Firmware 1.3.0+ verplaatst ook het
+      wake-geluid naar die speaker en wacht voordat de microfoon opengaat.
   tts_media_player:
     name: "🎚️ Audio · Mediaspeler voor spraak"
     description: >-

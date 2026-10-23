@@ -69,7 +69,7 @@ Adding this repository does not update an add-on installed from another reposito
    The device reconnects automatically. Verify a device connection appears in
    the new add-on's logs before removing the old add-on.
 
-## Choose a speaker for replies (0.7.0+)
+## Choose a speaker for replies and wake chimes (0.7.1+)
 
 Keep wake-word detection and the microphone on the Voice PE, and optionally
 send the original OpenAI voice to a Home Assistant media player. In the add-on
@@ -82,7 +82,9 @@ tts_announce: true
 ```
 
 Use your speaker's entity ID, then save and restart the add-on. Keep your
-working device port unchanged; no firmware update is required. External
+working device port unchanged. For wake sounds on that same speaker, also
+install firmware **1.3.0+** from the companion fork using ESPHome Builder.
+The Voice PE waits for the remote chime to finish before listening. External
 playback buffers audio first and adds some delay. The player must support
 local MP3 playback through HA's Media source; announcement/music restoration
 depends on its integration. Set `tts_output: voice_pe` to switch back.

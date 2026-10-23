@@ -20,6 +20,7 @@ from pipecat.frames.frames import (
     OutputAudioRawFrame,
     TTSStartedFrame,
     TTSStoppedFrame,
+    UserStartedSpeakingFrame,
 )
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 
@@ -61,6 +62,7 @@ class HomeAssistantPlayback:
         self._playback_requested = False
         self._files = set()
         self._deletions = set()
+        self._wake_pcm = None
 
     async def _http(self):
         if self._session is None:
@@ -125,7 +127,26 @@ class HomeAssistantPlayback:
         self._deletions.add(task)
         task.add_done_callback(self._deletions.discard)
 
-    async def play(self, audio: bytes, sample_rate: int, num_channels: int):
+    async def play_wake_chime(self):
+        if self._wake_pcm is None:
+            asset = Path(__file__).parent / "assets" / "wake_word_triggered.flac"
+            process = await asyncio.create_subprocess_exec(
+                "ffmpeg", "-hide_banner", "-loglevel", "error", "-i", str(asset),
+                "-f", "s16le", "-ar", "24000", "-ac", "1", "pipe:1",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                audio, _ = await asyncio.wait_for(process.communicate(), 10)
+                if process.returncode or not audio:
+                    raise RuntimeError("Could not decode the wake chime")
+                self._wake_pcm = audio
+            finally:
+                if process.returncode is None:
+                    process.kill()
+                    await process.wait()
+        await self.play(self._wake_pcm, 24000, 1, label="wake chime")
+
+    async def play(self, audio: bytes, sample_rate: int, num_channels: int, label="reply"):
         path = await self._encode(audio, sample_rate, num_channels)
         duration = len(audio) / (sample_rate * num_channels * 2)
         try:
@@ -141,7 +162,7 @@ class HomeAssistantPlayback:
                     "announce": self.announce,
                 },
             )
-            logger.info("Playing Realtime reply on %s (%.1fs)", self.entity_id, duration)
+            logger.info("Requested %s playback on %s (%.1fs)", label, self.entity_id, duration)
             await self._wait_until_finished(path.name, duration, baseline, requested_at)
         finally:
             # Keep a brief grace period for players that fetch the file late.
@@ -276,6 +297,12 @@ class MediaPlayerOutput(FrameProcessor):
         await super().process_frame(frame, direction)
         if isinstance(frame, (InterruptionFrame, CancelFrame, EndFrame)):
             await self.interrupt()
+        elif isinstance(frame, UserStartedSpeakingFrame) and direction == FrameDirection.DOWNSTREAM:
+            # Resume HERE, after this processor handled the preceding VAD
+            # interruption. Resuming from an upstream PhaseEmitter callback
+            # races the interruption while it is still queued on this stage,
+            # leaving every following audio frame muted.
+            self.resume()
         if direction == FrameDirection.DOWNSTREAM:
             if isinstance(frame, TTSStartedFrame):
                 if not self._discard_audio:

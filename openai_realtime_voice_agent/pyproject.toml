@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Home Assistant addon for OpenAI Realtime API voice control with WebSocket support using Pipecat"
 authors = ["Your Name <your.email@example.com>"]
 packages = [{include = "app", from = "."}]
+include = ["app/assets/*"]
 
 [tool.poetry.dependencies]
 python = ">=3.11,<3.14"

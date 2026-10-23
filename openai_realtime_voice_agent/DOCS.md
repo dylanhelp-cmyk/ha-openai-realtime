@@ -1,6 +1,7 @@
 # OpenAI Realtime 2 Voice Agent — Documentation
 
-> This is the Dylan fork (0.7.0), with selectable speech output and the duplicate-start fix.
+> This is the Dylan fork (0.7.1), with selectable speech output, external wake chimes,
+> and the duplicate-start fix.
 > Its add-on defaults to port **8081**. Set the Voice PE's `va_url` to
 > `ws://<Home Assistant IP>:8081/`. For an existing installation, follow
 > [Switching from the original add-on](../README.md#switching-from-the-original-add-on).
@@ -109,7 +110,7 @@ answer back.
 
 ### Play replies on another speaker
 
-Update the add-on to **0.7.0** or later, then open **Configuration → Edit in YAML**
+Update the add-on to **0.7.1** or later, then open **Configuration → Edit in YAML**
 and add or change these options alongside your existing settings:
 
 ```yaml
@@ -120,9 +121,23 @@ tts_announce: true
 
 Replace `media_player.living_room` with the exact entity ID of your speaker
 (find it in **Developer tools → States**). Save and restart the add-on. Keep
-your working `websocket_port` and Voice PE `va_url` unchanged. **No firmware
-update is needed.** The Voice PE continues to handle wake words, microphone,
-LEDs, and local chimes; spoken replies go only to the selected speaker.
+your working `websocket_port` and Voice PE `va_url` unchanged. Spoken replies
+go only to the selected speaker. The Voice PE continues to handle wake words,
+microphone and LEDs.
+
+For the **wake chime on the same external speaker**, also install firmware
+**1.3.0 or later** from `dylanhelp-cmyk/home-assistant-voice-pe` using ESPHome
+Device Builder → your Voice PE → **Install → Wirelessly**. Keep your existing
+device settings and Hey Jarvis override. The backend tells updated firmware
+which output is selected, so no extra routing option is needed in ESPHome.
+Updated firmware suppresses the device's own wake/center-button chime in
+external mode, asks the backend to play the original Voice PE wake sound on
+the selected player, and waits for it to finish before opening the microphone.
+The device's Wake sound switch still controls the wake-word chime.
+
+Update the add-on first, then the firmware. Older firmware keeps its local
+chime while benefiting from the 0.7.1 silent-reply fix. If you switch back to
+`tts_output: voice_pe`, local wake sounds and streaming replies work as before.
 
 - The original OpenAI speech is encoded as MP3; the configured voice and speed
   still apply. This does not call another TTS provider or regenerate the reply.
@@ -138,6 +153,9 @@ LEDs, and local chimes; spoken replies go only to the selected speaker.
 - "Stop" or the center button cancels pending replies and requests
   `media_player.media_stop` for active external playback. It does not stop
   unrelated music when no reply is active. The player must support stopping.
+- With firmware 1.3.0+, pressing the center button, muting, disconnecting, or starting another
+  wake while the chime is playing cancels that pending wake. A late chime
+  acknowledgement cannot reopen the microphone.
 - To switch speakers, change `tts_media_player` and restart the add-on. To
   return speech to the device, set `tts_output: voice_pe` and restart.
 

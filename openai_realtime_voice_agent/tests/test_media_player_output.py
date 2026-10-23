@@ -8,6 +8,7 @@ from pathlib import Path
 import tempfile
 import time
 import unittest
+from unittest.mock import AsyncMock
 
 from aiohttp import web
 from pipecat.frames.frames import (
@@ -232,6 +233,16 @@ class PlaybackHTTPTests(unittest.IsolatedAsyncioTestCase):
         self.playback._playback_requested = True
         await self.playback.stop()
         self.assertEqual(self.calls, [("/api/services/media_player/media_stop", {"entity_id": "media_player.kitchen"})])
+
+    async def test_original_wake_chime_decodes_to_non_silent_pcm_and_uses_same_player(self):
+        self.playback.play = AsyncMock()
+        await self.playback.play_wake_chime()
+        args = self.playback.play.call_args
+        audio, rate, channels = args.args
+        self.assertEqual((rate, channels), (24000, 1))
+        self.assertGreater(len(audio), 40000)
+        self.assertNotEqual(audio, bytes(len(audio)))
+        self.assertEqual(args.kwargs, {"label": "wake chime"})
 
     async def test_unreported_announcement_uses_duration_guard(self):
         self.playback.START_GRACE_SECONDS = 0.02

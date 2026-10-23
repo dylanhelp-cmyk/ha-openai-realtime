@@ -2,6 +2,20 @@
 
 All notable changes to this add-on. Newest first.
 
+## 0.7.1
+
+- Fix silent external replies: Pipecat's user-speech interruption could reach
+  the output stage after an upstream callback resumed audio, leaving the reply
+  permanently gated. Resume on the user-start frame at the output stage itself.
+  A full Pipecat pipeline test reproduces the failure on 0.7.0 and passes now.
+- Play the original Voice PE wake sound through the same selected media player
+  as speech. Requires companion firmware **1.3.0+**; update both halves.
+- Keep the microphone closed until the external wake chime and echo guard end.
+  Cancel stopped/superseded wake requests, and ignore stale acknowledgements.
+- Preserve local chimes with older firmware and when `tts_output: voice_pe`.
+- Add actual pipeline-ordering, wake-chime cancellation/readiness, and original
+  sound decoding tests. Include the upstream sound asset and its MIT attribution.
+
 ## 0.7.0
 
 - Add selectable speech output: keep `tts_output: voice_pe` (default), or use

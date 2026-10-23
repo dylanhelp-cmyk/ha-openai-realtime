@@ -22,6 +22,7 @@ from app.session_manager import SessionManager
 from app.audio_recording_service import AudioRecordingService
 from app.phase_emitter import PhaseEmitter
 from app.media_player_output import HomeAssistantPlayback, MediaPlayerOutput
+from app.wake_chime import ExternalWakeChime
 from app.transcript_logger import TranscriptLogger
 
 logger = logging.getLogger(__name__)
@@ -369,6 +370,10 @@ class WebSocketHandler:
         self.playback_prebuffer_ms = max(0, int(playback_prebuffer_ms))
         self.media_player_playback = media_player_playback
         self.media_player_output: Optional[MediaPlayerOutput] = None
+        self.external_wake = (
+            ExternalWakeChime(media_player_playback, self.broadcast_json, wake_open_delay_ms)
+            if media_player_playback is not None else None
+        )
 
         self.transport: Optional[WebsocketServerTransport] = None
         self.pipeline: Optional[Pipeline] = None
@@ -613,6 +618,8 @@ class WebSocketHandler:
             # the 1.5 s time-window alone misses responses that land later —
             # OpenAI replying to the spoken "stop", or a slow tool's answer.
             _kill_next_response["v"] = True
+            if self.external_wake is not None:
+                await self.external_wake.cancel()
             if self.media_player_output is not None:
                 await self.media_player_output.interrupt()
             try:
@@ -681,7 +688,7 @@ class WebSocketHandler:
             except Exception as e:
                 logger.debug(f"🧽 mic-flush input clear no-op ({e!r})")
 
-        async def _on_device_wake():
+        async def _on_device_wake(data=None):
             # va_client sends {"type":"wake"} on every wake (start_session). Mark
             # the turn boundary for the dangling-VAD guard (A): until the user
             # actually speaks, a server-VAD end-of-turn is a stale pre-wake
@@ -691,6 +698,12 @@ class WebSocketHandler:
             # New turn boundary: drop any pending post-tool kill so it can't
             # leak onto this fresh turn's response.
             _kill_next_response["v"] = False
+            if self.external_wake is not None:
+                if data and data.get("external_wake") and self.media_player_output is not None:
+                    # Discard any old reply/tool tail throughout the chime.
+                    # The next real user-start frame resumes this output stage.
+                    await self.media_player_output.interrupt()
+                await self.external_wake.start(data or {})
 
         # Wire the dangling-VAD guard's kill-window into the PhaseEmitter. It
         # reuses the SAME _interrupt_kill_until + _kill_racing_response machinery
@@ -702,8 +715,6 @@ class WebSocketHandler:
             # window and the post-tool flag so neither can cancel it.
             _interrupt_kill_until["t"] = 0.0
             _kill_next_response["v"] = False
-            if self.media_player_output is not None:
-                self.media_player_output.resume()
 
         phase_emitter.set_kill_window_handlers(
             on_dangling=lambda: _interrupt_kill_until.__setitem__(
@@ -807,6 +818,7 @@ class WebSocketHandler:
                 {
                     "type": "hello",
                     "audio_out": "pcm",
+                    "external_audio": self.media_player_playback is not None,
                     "follow_up_ms": self.follow_up_ms,
                     "follow_up_open_delay_ms": self.follow_up_open_delay_ms,
                     "wake_open_delay_ms": self.wake_open_delay_ms,
@@ -819,6 +831,8 @@ class WebSocketHandler:
         async def on_client_disconnected(transport: WebsocketServerTransport, websocket, *args, **kwargs):
             """Handle client disconnection."""
             self._websockets.discard(websocket)
+            if self.external_wake is not None:
+                await self.external_wake.cancel()
             if self.media_player_output is not None:
                 await self.media_player_output.interrupt()
             client_id = self.extract_client_id(websocket)
@@ -893,6 +907,8 @@ class WebSocketHandler:
     
     async def cleanup(self):
         """Cleanup WebSocket handler resources."""
+        if self.external_wake is not None:
+            await self.external_wake.cancel()
         if self.media_player_output is not None:
             await self.media_player_output.interrupt()
         if self.media_player_playback is not None:
