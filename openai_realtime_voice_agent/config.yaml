@@ -1,5 +1,5 @@
 name: GPT-Live Voice Agent (Dylan fork)
-version: "1.1.0"
+version: "1.2.0"
 slug: openai_realtime_voice_agent
 description: Greeting-first GPT-Live conversations, Home Assistant control and streaming speaker output.
 url: https://github.com/dylanhelp-cmyk/ha-openai-realtime
@@ -84,6 +84,19 @@ options:
   log_transcripts: false
   tts_stream_buffer_seconds: 5
   output_buffer_ms: 3000
+  aec_enabled: true
+  aec_delay_ms: -1
+  aec_auto_delay: true
+  aec_delay_search_ms: 80
+  aec_alignment_margin_ms: 20
+  aec_filter_ms: 256
+  aec_suppression_db: -25
+  aec_suppression_active_db: -8
+  aec_log_stats: false
+  aec_calibrate_on_next_wake: false
+  aec_calibration_max_delay_ms: 5000
+  aec_calibration_min_confidence: 0.35
+  aec_calibration_level: 0.15
 schema:
   openai_api_key: password
   instructions: str
@@ -125,3 +138,16 @@ schema:
   log_transcripts: bool
   tts_stream_buffer_seconds: float(4,30)
   output_buffer_ms: int(100,10000)
+  aec_enabled: bool
+  aec_delay_ms: float(-1,10000)
+  aec_auto_delay: bool
+  aec_delay_search_ms: int(10,250)
+  aec_alignment_margin_ms: int(0,100)
+  aec_filter_ms: int(80,1000)
+  aec_suppression_db: int(-60,0)
+  aec_suppression_active_db: int(-40,0)
+  aec_log_stats: bool
+  aec_calibrate_on_next_wake: bool
+  aec_calibration_max_delay_ms: int(200,10000)
+  aec_calibration_min_confidence: float(0.1,0.95)
+  aec_calibration_level: float(0.02,0.5)

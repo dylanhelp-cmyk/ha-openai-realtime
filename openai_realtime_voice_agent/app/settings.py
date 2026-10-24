@@ -59,6 +59,19 @@ class Settings:
     output_silence_threshold_db: float = -55
     input_activity_threshold_db: float = -42
     input_buffer_ms: int = 600
+    aec_enabled: bool = True
+    aec_delay_ms: float = -1.0
+    aec_auto_delay: bool = True
+    aec_delay_search_ms: int = 80
+    aec_alignment_margin_ms: int = 20
+    aec_filter_ms: int = 256
+    aec_suppression_db: int = -25
+    aec_suppression_active_db: int = -8
+    aec_log_stats: bool = False
+    aec_calibrate_on_next_wake: bool = False
+    aec_calibration_max_delay_ms: int = 5000
+    aec_calibration_min_confidence: float = 0.35
+    aec_calibration_level: float = 0.15
     idle_timeout_seconds: float = 15
     max_session_seconds: float = 180
     session_start_timeout_s: float = 12
@@ -95,6 +108,15 @@ class Settings:
             "output_silence_threshold_db": (-90, -10),
             "input_activity_threshold_db": (-90, -10),
             "input_buffer_ms": (100, 3000),
+            "aec_delay_ms": (-1, 10000),
+            "aec_delay_search_ms": (10, 250),
+            "aec_alignment_margin_ms": (0, 100),
+            "aec_filter_ms": (80, 1000),
+            "aec_suppression_db": (-60, 0),
+            "aec_suppression_active_db": (-40, 0),
+            "aec_calibration_max_delay_ms": (200, 10000),
+            "aec_calibration_min_confidence": (0.1, 0.95),
+            "aec_calibration_level": (0.02, 0.5),
             "idle_timeout_seconds": (3, 120),
             "max_session_seconds": (10, 1800),
             "session_start_timeout_s": (1, 30),
@@ -111,6 +133,24 @@ class Settings:
                 or not lo <= value <= hi
             ):
                 raise ValueError(f"{key} must be between {lo} and {hi}")
+        if self.aec_delay_ms < 0 and self.aec_delay_ms != -1:
+            raise ValueError(
+                "aec_delay_ms must be -1 for measured delay, or a non-negative delay"
+            )
+        if self.aec_alignment_margin_ms + 20 > self.aec_filter_ms:
+            raise ValueError(
+                "AEC filter must exceed its alignment margin by at least 20 ms"
+            )
+        if self.aec_calibrate_on_next_wake and self.tts_output != "media_player":
+            raise ValueError("Echo calibration requires external media_player output")
+        for key in (
+            "aec_enabled",
+            "aec_auto_delay",
+            "aec_log_stats",
+            "aec_calibrate_on_next_wake",
+        ):
+            if type(getattr(self, key)) is not bool:
+                raise ValueError(f"{key} must be true or false")
         for key in (
             "instructions",
             "backend_instructions",

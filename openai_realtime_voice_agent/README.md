@@ -7,3 +7,5 @@ Say Hey Jarvis: the microphone starts immediately, GPT-Live opens with your conf
 See [the upgrade and configuration guide](DOCS.md) before updating from 0.8.0. Companion firmware **2.0.0** is required for the complete new behaviour. Preserve your working device port and Hey Jarvis override.
 
 The add-on keeps its existing slug so Home Assistant can update the installed fork. GPT-Live API access and a supported backend model are required. Physical WiiM latency and full-duplex echo still need listening tests.
+
+Version **1.2.0** adds external-speaker software echo cancellation and a local next-wake delay calibration. See [calibration and tuning](DOCS.md#upgrade-from-110-live-external-speaker-echo-cancellation) before evaluating full duplex.

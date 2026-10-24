@@ -39,6 +39,7 @@ class SpeechOutput:
         self.command = None
         self.tail = None
         self.started = time.monotonic()
+        self.on_reference = None
         self.worker = asyncio.create_task(self._run())
 
     @property
@@ -194,6 +195,8 @@ class SpeechOutput:
                 else:
                     frame, loud = SILENCE, False
                 await self._activity(loud)
+                if self.on_reference:
+                    self.on_reference(frame, time.monotonic())
                 if self.encoder:
                     await self.encoder.write(frame)
                 else:

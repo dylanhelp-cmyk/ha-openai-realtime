@@ -101,9 +101,9 @@ configuration:
       this on reconnect.
   microphone_mode:
     name: Microphone mode
-    description: full_duplex keeps the mic open throughout the conversation, including speech and pauses.
-      gated optionally closes it during audible output. External speakers have no shared echo-cancellation
-      reference.
+    description: full_duplex keeps the mic open throughout speech and pauses. For external speakers, calibrate
+      the playback delay to enable reference-based software AEC. gated optionally closes the mic during
+      speech activity.
   mic_reopen_delay_ms:
     name: Gated microphone echo guard (ms)
     description: Extra echo decay before reopening a gated mic. Ignored in full_duplex mode; no input
@@ -118,8 +118,9 @@ configuration:
       -55. It does not cut speech or split the HTTP stream.
   input_activity_threshold_db:
     name: Input activity threshold (dBFS)
-    description: Microphone level that refreshes the conversation idle timer. Default -42. Raise for a
-      noisy room; lower for quiet voices. This is not a server VAD setting.
+    description: Microphone level after active echo cancellation that refreshes the conversation idle
+      timer. Default -42. Raise for room noise or lower for quiet voices. This does not control GPT-Live
+      turn detection.
   input_buffer_ms:
     name: Startup microphone buffer (ms)
     description: Bounded capture while connecting to Live. Default 600. Increase if immediate words are
@@ -161,3 +162,66 @@ configuration:
     description: Maximum queued Live PCM during startup or network bursts, default 3000. Does not wait
       to fill. Exceeding the spoken-audio limit fails the session instead of accumulating stale delayed
       speech.
+  aec_enabled:
+    name: External speaker echo cancellation
+    description: Use local SpeexDSP AEC before microphone audio reaches GPT-Live. Applies to media_player
+      output. Requires a measured or manually set delay; without one, logs that input passes through unchanged.
+      Does not close the microphone.
+  aec_delay_ms:
+    name: Speaker echo delay (ms)
+    description: "-1 uses the saved calibration for this speaker, microphone address and stream settings.\
+      \ Set 0\u201310000 to override manually. Positive values mean speaker audio reaches the microphone\
+      \ later than the outgoing reference. This aligns a reference; it does not delay microphone delivery\
+      \ by that amount."
+  aec_auto_delay:
+    name: Track echo delay drift
+    description: Refine alignment slowly during strongly correlated speaker audio to follow small buffering
+      and independent-clock changes. Rejects weak matches during user speech. Recalibrate after large
+      player/source/group changes.
+  aec_delay_search_ms:
+    name: Delay tracking search radius (ms)
+    description: Look this far either side of the current echo delay when tracking, default 80. Does not
+      add latency. Large changes outside the window need calibration.
+  aec_alignment_margin_ms:
+    name: AEC alignment headroom (ms)
+    description: Let the adaptive filter see the reference this much before its echo, default 20 ms. This
+      is subtracted internally from the measured bulk delay; do not subtract it from your measurement.
+      Must fit inside the filter tail.
+  aec_filter_ms:
+    name: Room echo filter tail (ms)
+    description: Adaptive room-response length after aligning the main playback delay, default 256 ms.
+      Raise cautiously for long reflections; longer filters use more CPU and converge more slowly. This
+      is not the full WiiM playback delay.
+  aec_suppression_db:
+    name: Residual echo suppression (dB)
+    description: Maximum additional attenuation of remaining echo when the assistant is speaking, default
+      -25 dB. More negative is stronger. 0 disables this residual suppression, retaining adaptive cancellation.
+  aec_suppression_active_db:
+    name: Residual suppression while you speak (dB)
+    description: Maximum residual suppression during simultaneous user/assistant speech, default -8 dB.
+      Move toward 0 if your voice becomes thin or clipped; stronger negative values may suppress more
+      remaining echo.
+  aec_log_stats:
+    name: Log AEC tuning measurements
+    description: Log effective delay and microphone RMS levels every five seconds. Levels may include
+      your voice and are not an echo-only quality measurement. No audio recordings or transcripts are
+      written.
+  aec_calibrate_on_next_wake:
+    name: Measure echo delay on next wake
+    description: 'Enable, save and restart, then say Hey Jarvis and keep quiet. The next wake plays three
+      short test sweeps through the normal continuous speaker stream. No OpenAI connection is made for
+      this test. A clear measurement is saved for aec_delay_ms: -1; later wakes are normal conversations.
+      Turn this off before future restarts unless another test is wanted.'
+  aec_calibration_max_delay_ms:
+    name: Calibration delay search limit (ms)
+    description: Maximum speaker-to-microphone delay to search, default 5000 ms. The test listens this
+      long after the sweeps. Raise if a high-latency speaker is outside the search range.
+  aec_calibration_min_confidence:
+    name: Calibration minimum correlation
+    description: Reject weak matches instead of overwriting a previous calibration, default 0.35. Keep
+      quiet and adjust speaker level or position before lowering this threshold. Ambiguous and clipped
+      captures are also rejected.
+  aec_calibration_level:
+    name: Calibration test level
+    description: Digital peak level of the soft-edged test sweeps, default 0.15. Does not change the WiiM
+      volume. Raise gently if the microphone cannot hear the test; reduce if it clips.

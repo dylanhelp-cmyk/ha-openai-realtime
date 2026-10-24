@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0 — Live echo cancellation and delay measurement
+
+- Add local SpeexDSP adaptive AEC and configurable residual suppression for external media-player output, preserving full-duplex input and one continuous output stream.
+- Align a bounded reference history to microphone capture using a measured/manual offset, room filter tail and slow confidence-gated delay tracking.
+- Add one-shot calibration on the next wake: play three soft-edged sweeps through the real HTTP/MP3 path, measure their return locally and save only clear matches. No OpenAI session is created for calibration.
+- Persist numeric calibration per speaker/microphone/stream profile; keep raw captures only in bounded memory and discard them on completion or Stop. Preserve the previous result on failed tests.
+- Expose delay, tracking, filter tail, suppression, overlap suppression, diagnostics and calibration controls. Without a measured/manual delay, automatic AEC explicitly bypasses instead of guessing alignment.
+- Add real native-filter, lossy-codec, simultaneous-speech, drift, calibration accuracy and lifecycle regression tests. No Voice PE firmware change beyond 2.0.0 is required.
+
 ## 1.1.0 — Continuous conversation audio
 
 - Keep one MP3 encoder, URL, HTTP connection and Home Assistant playback request for the entire conversation. Start warming the player at wake; send silence through pauses without reopening playback.

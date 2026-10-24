@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import aiohttp
 
+from app.echo import EchoProcessor
 from app.output import SpeechOutput
 from app.pcm import InputAudio, dbfs
 
@@ -18,10 +19,13 @@ LIVE_URL = "wss://api.openai.com/v1/live/sessions"
 
 
 class LiveSession:
-    def __init__(self, settings, device, http, tools, audio_server, token):
+    def __init__(
+        self, settings, device, http, tools, audio_server, token, calibration_store=None
+    ):
         self.s, self.device, self.http, self.tools = settings, device, http, tools
         self.audio_server, self.token = audio_server, token
         self.input = InputAudio(settings.input_buffer_ms)
+        self.echo = EchoProcessor(settings, device, calibration_store)
         self.ws = None
         self.ready = asyncio.Event()
         self.closed = False
@@ -47,6 +51,7 @@ class LiveSession:
             self.fail,
             token,
         )
+        self.output.on_reference = self.echo.reference
 
     def session_config(self):
         greeting = (
@@ -273,6 +278,7 @@ class LiveSession:
     def receive_audio(self, audio):
         if self.closed or not self.device.mic_enabled:
             return
+        audio = self.echo.process(audio)
         self.input.append(audio)
         even = audio[: len(audio) // 2 * 2]
         if dbfs(even) > self.s.input_activity_threshold_db:
@@ -371,6 +377,7 @@ class LiveSession:
             *(t for t in self.tasks if t is not current), return_exceptions=True
         )
         await self.output.close()
+        self.echo.close()
         if self.ws and not self.ws.closed:
             with suppress(Exception):
                 await self.send({"type": "session.close"})

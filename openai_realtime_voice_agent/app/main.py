@@ -8,7 +8,9 @@ import os
 import aiohttp
 from aiohttp import web
 
+from app.calibration import CalibrationSession
 from app.device import Device
+from app.echo import CalibrationStore
 from app.live_audio import AudioHTTPServer
 from app.live_session import LiveSession
 from app.mcp_tools import HomeTools
@@ -26,6 +28,8 @@ class VoiceBridge:
         self.devices = set()
         self.sessions = set()
         self.owner = None
+        self.calibration_store = CalibrationStore()
+        self.calibration_pending = settings.aec_calibrate_on_next_wake
         self.token = os.environ.get("SUPERVISOR_TOKEN") or settings.longlived_token
 
     async def start(self, app):
@@ -59,6 +63,7 @@ class VoiceBridge:
         ws = web.WebSocketResponse(heartbeat=30, max_msg_size=128 * 1024)
         await ws.prepare(request)
         device = Device(ws, self.s)
+        device.identity = request.remote or "unknown"
         self.devices.add(device)
         session = None
         runner = None
@@ -121,9 +126,26 @@ class VoiceBridge:
                                 "ok": True,
                             }
                         )
-                    session = LiveSession(
-                        self.s, device, self.http, self.tools, self.server, self.token
-                    )
+                    if self.calibration_pending:
+                        self.calibration_pending = False
+                        session = CalibrationSession(
+                            self.s,
+                            device,
+                            self.http,
+                            self.server,
+                            self.token,
+                            self.calibration_store,
+                        )
+                    else:
+                        session = LiveSession(
+                            self.s,
+                            device,
+                            self.http,
+                            self.tools,
+                            self.server,
+                            self.token,
+                            calibration_store=self.calibration_store,
+                        )
                     self.sessions.add(session)
                     runner = asyncio.create_task(session.run())
 

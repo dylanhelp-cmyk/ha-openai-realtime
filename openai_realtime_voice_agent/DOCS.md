@@ -1,7 +1,57 @@
-# GPT-Live Voice Agent 1.1.0
+# GPT-Live Voice Agent 1.2.0
 
 Wake → microphone starts immediately → GPT-Live streams the configured greeting → conversation → quiet timeout closes the paid session.
 No wake chime, no manual turn commits, and no always-connected OpenAI session.
+
+## Upgrade from 1.1.0: live external-speaker echo cancellation
+
+Update the add-on to **1.2.0**. Keep Voice PE firmware **2.0.0**, the current device YAML, working ports, speaker and greeting. No ESP32 flash is required.
+
+The backend now uses SpeexDSP adaptive acoustic echo cancellation before forwarding microphone audio to GPT-Live. The reference is the actual paced PCM frame sent into the existing continuous MP3 stream, including silence. Capture is processed in 20 ms blocks at 16 kHz and then resampled to Live's format. Full duplex remains open throughout; no echo-triggered microphone muting or per-reply playback restarts are added.
+
+### Measure the playback offset
+
+1. Keep the WiiM in its normal source/group arrangement and at a comfortable listening volume. Stop other sounds and keep quiet during the test.
+2. Merge these into your add-on configuration, save and restart:
+
+   ```yaml
+   microphone_mode: full_duplex
+   aec_enabled: true
+   aec_delay_ms: -1
+   aec_auto_delay: true
+   aec_calibrate_on_next_wake: true
+   ```
+
+3. Say **Hey Jarvis**. This wake runs a local calibration instead of opening GPT-Live. Three short, soft-edged sweeps play through the normal HTTP/MP3 speaker path; the Voice PE records their return. With the default search range the test lasts roughly eight seconds after speaker startup. No test audio is sent to OpenAI.
+4. Read the add-on log. A usable result looks like `Echo calibration SAVED: delay=... ms, confidence=..., peak_ratio=...`. The delay includes encoding, player buffering, room travel and the microphone capture/return path. The confidence value is a normalised correlation score, not a probability.
+5. Set `aec_calibrate_on_next_wake: false`, save and restart. With `aec_delay_ms: -1`, the saved delay is used automatically. The log confirms `Live AEC active` and its effective delay on the next conversation.
+
+Calibration is one-shot per add-on start: later wakes are normal conversations even while the flag remains true. Turn the flag off before later restarts unless you want to repeat the test. Failed, ambiguous, clipped or interrupted captures do not overwrite the last good measurement. The saved result is scoped to the speaker entity, microphone network address, announcement setting and stream prebuffer. It survives add-on restarts and updates in `/data/echo_calibration.json`; raw audio is kept only in bounded memory and discarded after the test.
+
+Until a matching calibration is available, automatic mode logs that AEC is awaiting calibration and passes microphone audio through unchanged. A manual non-negative `aec_delay_ms` also enables processing. AEC is applied to `media_player` output only; local Voice PE output keeps its existing hardware processing.
+
+### Tune the cancellation
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `aec_enabled` | true | Enable or bypass external-speaker AEC. |
+| `aec_delay_ms` | -1 | Use saved measurement; any value from 0 to 10000 overrides it manually. Positive means the echo arrives later than the reference. |
+| `aec_auto_delay` | true | Follow small changes and independent-clock drift using strongly correlated audio. |
+| `aec_delay_search_ms` | 80 | Search radius around the effective offset during tracking. |
+| `aec_alignment_margin_ms` | 20 | Internal reference lead for the adaptive filter. Do not subtract this from the measured delay yourself. |
+| `aec_filter_ms` | 256 | Room-response tail after aligning the main delay. Longer filters use more CPU and adapt more slowly. |
+| `aec_suppression_db` | -25 | Residual echo suppression when only the assistant speaks; more negative is stronger. |
+| `aec_suppression_active_db` | -8 | Residual suppression while you speak too; move toward 0 if your voice is being reduced. |
+| `aec_log_stats` | false | Log effective delay and before/after microphone RMS every five seconds. These levels may include your voice and are not echo-only quality measurements. |
+| `aec_calibration_max_delay_ms` | 5000 | Measurement search range; increase for a very slow player. |
+| `aec_calibration_min_confidence` | 0.35 | Minimum normalised match; weak or ambiguous results are rejected. |
+| `aec_calibration_level` | 0.15 | Test signal peak level; does not change WiiM volume. |
+
+The delay selects an older reference; it does **not** hold microphone audio for that many milliseconds. Small corrections are smoothed to avoid reference jumps. Periodic tones and weak matches during user speech do not move the offset. The native adaptive filter and residual suppression handle the echo; tracking is only for alignment.
+
+Start with the measured delay and defaults. If user speech sounds reduced during simultaneous speaking, bring `aec_suppression_active_db` closer to 0 before increasing suppression elsewhere. If echo remains, check alignment before increasing `aec_filter_ms`. Recalibrate after large source, grouping, buffering or placement changes. The adaptive filter needs a brief convergence period at each new conversation. Player clipping, nonlinear speaker processing and large variable delays can limit cancellation; physical WiiM performance still needs testing.
+
+Implementation references: [SpeexDSP echo API](https://github.com/xiph/speexdsp/blob/master/include/speex/speex_echo.h), [residual suppression controls](https://github.com/xiph/speexdsp/blob/master/include/speex/speex_preprocess.h), and [Speex echo timing guidance](https://www.speex.org/docs/manual/speex-manual/node7.html).
 
 ## Upgrade from GPT-Live 1.0.0
 
@@ -55,7 +105,7 @@ The HTTP address must be reachable from the WiiM. Keep it on the LAN. One encode
 
 The greeting text is included at session startup and sent once through `session.commentary.append` after `session.started`, with input audio running. GPT-Live may paraphrase, add words, or stay silent. A commentary acknowledgement is not proof of audible playback. No prerecorded clip or secondary TTS service is substituted. Empty `opening_greeting` disables it.
 
-`full_duplex` is the default and keeps the microphone open throughout the conversation without clearing captured user audio between replies. `gated` optionally closes it during speech activity and reopens after the quiet period and echo guard. Both modes keep the same output stream open through pauses. With external ceiling speakers, echo can be interpreted as the user; full duplex needs a physical listening test. The Stop word, centre button and mute still terminate the conversation.
+`full_duplex` is the default and keeps the microphone open throughout the conversation without clearing captured user audio between replies. `gated` optionally closes it during speech activity and reopens after the quiet period and echo guard. Both modes keep the same output stream open through pauses. With external ceiling speakers, run the echo calibration above to enable software AEC. Full duplex and the measured alignment still need a physical listening test. The Stop word, centre button and mute still terminate the conversation.
 
 ## Timing controls
 
@@ -90,6 +140,6 @@ Transcript logging is off by default. Useful logs include startup latency, no-au
 
 ## Runtime and protocol
 
-`aiohttp` handles both WebSockets. Device input is mono PCM16 at 16 kHz, converted statefully to Live's 24 kHz PCM16; local output remains 24 kHz. External output is one continuously paced MP3 stream per conversation. Local PCM output is also continuously paced through speech and silence. Input is paced in 20 ms blocks, including silence while capture is gated, with bounded buffering. There is no Pipecat, SDK-specific Realtime adapter, second transcription model, legacy VAD, buffered media-source fallback, web-search wrapper, recording subsystem, or wake-chime asset.
+`aiohttp` handles both WebSockets. Device input is mono PCM16 at 16 kHz, converted statefully to Live's 24 kHz PCM16; local output remains 24 kHz. External output is one continuously paced MP3 stream per conversation. Reference-aligned SpeexDSP AEC processes captured microphone audio locally when an offset is measured or configured; NumPy supplies bounded reference interpolation and correlation. Local PCM output is also continuously paced through speech and silence. Input is paced in 20 ms blocks, including silence while capture is gated, with bounded buffering. There is no Pipecat, SDK-specific Realtime adapter, second transcription model, legacy VAD, buffered media-source fallback, web-search wrapper, recording subsystem, or wake-chime asset.
 
 Source references: [Live WebSockets](https://developers.openai.com/api/docs/guides/voice-websockets), [session greeting/lifecycle](https://developers.openai.com/api/docs/guides/live-conversations), [delegation/tools](https://developers.openai.com/api/docs/guides/live-delegation), [prompting](https://developers.openai.com/api/docs/guides/live-prompting), [pricing](https://developers.openai.com/api/docs/models/gpt-live-1).
