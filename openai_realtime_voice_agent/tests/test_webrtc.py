@@ -145,9 +145,12 @@ class WebRTCTests(unittest.IsolatedAsyncioTestCase):
                         ),
                         5,
                     )
+                self.assertTrue(client.ready.is_set())
+                async with asyncio.timeout(2):
+                    while not input_calls:
+                        await asyncio.sleep(.02)
                 event = await asyncio.wait_for(client.receive(), 2)
                 self.assertEqual(json.loads(event.data)["type"], "session.started")
-                client.ready.set()
                 for kind in ("session.start", "session.input_audio.append"):
                     with self.assertRaises(ValueError):
                         await client.send_json({"type": kind})

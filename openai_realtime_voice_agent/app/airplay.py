@@ -41,6 +41,7 @@ class AirPlayOutput:
         self.scheduled_at_ms = None
         self.cleanup_lock = asyncio.Lock()
         self.stage = "spawn"
+        self.last_write_at = None
 
     def _fail(self, message):
         if not self.closed and self.error is None:
@@ -120,8 +121,20 @@ class AirPlayOutput:
         code = await self.process.wait()
         self._fail(f"AirPlay sender exited (code={code})")
 
+    async def _startup_feed(self):
+        """Keep the producer alive while START/receiver warm-up is in flight."""
+        try:
+            while True:
+                await asyncio.sleep(0.02)
+                await self.write(SILENCE)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            self._fail("AirPlay startup PCM feed failed")
+
     async def start(self):
         began = time.monotonic()
+        feeder = None
         try:
             self.folder = tempfile.TemporaryDirectory(prefix="gpt-live-airplay-")
             fifo = str(Path(self.folder.name) / "control")
@@ -184,14 +197,23 @@ class AirPlayOutput:
             async with asyncio.timeout(self.s.tts_stream_start_timeout_s):
                 self.stage = "connect"
                 await self._wait(self.connected)
-                # Prime just one silence frame AFTER connect. Do not queue
-                # seconds of silence while authentication/connection runs.
-                await self.write(SILENCE)
+                # A bounded 100ms cushion, not seconds of connection backlog.
+                # Continue feeding across START instead of starving the sender
+                # after its first packet while waiting for acknowledgement.
+                for _ in range(5):
+                    await self.write(SILENCE)
+                feeder = asyncio.create_task(self._startup_feed())
                 self.stage = "initial_audio"
                 await self._wait(self.audio)
                 self.stage = "start_acknowledgement"
                 self._command("START_UNIX_MS=0\nACTION=START\n")
                 await self._wait(self.started)
+                self.stage = "settling"
+                await asyncio.sleep(0.3)
+                self.check()
+                feeder.cancel()
+                await asyncio.gather(feeder, return_exceptions=True)
+                feeder = None
             self.stage = "streaming"
             self.ready.set()
             lead = (
@@ -200,7 +222,7 @@ class AirPlayOutput:
                 else 0
             )
             log.info(
-                "Direct AirPlay ready in %.0f ms (connect=%.0f ms, start=%.0f ms, scheduled_lead=%.0f ms, requested_buffer=%d ms, requested_render_lead=%d ms; sender acknowledgement, not acoustic playback)",
+                "Direct AirPlay ready in %.0f ms (connect=%.0f ms, start=%.0f ms, scheduled_lead=%.0f ms, requested_buffer=%d ms, requested_render_lead=%d ms; startup_prime=100 ms, continuous_feed_settle=300 ms; sender acknowledgement, not acoustic playback)",
                 (time.monotonic() - began) * 1000,
                 (self.connected_at - began) * 1000,
                 (time.monotonic() - self.connected_at) * 1000,
@@ -227,9 +249,24 @@ class AirPlayOutput:
         except BaseException:
             await self.close()
             raise
+        finally:
+            if feeder:
+                feeder.cancel()
+                await asyncio.gather(feeder, return_exceptions=True)
 
     async def write(self, frame):
         self.check()
+        now = time.monotonic()
+        if (
+            self.stage == "streaming"
+            and self.last_write_at is not None
+            and now - self.last_write_at > 0.08
+        ):
+            log.warning(
+                "AirPlay PCM feed gap=%.0f ms (producer scheduling/backpressure; not a measured speaker delay)",
+                (now - self.last_write_at) * 1000,
+            )
+        self.last_write_at = now
         converted, self.resampler = audioop.ratecv(
             frame, 2, 1, RATE, AIRPLAY_RATE, self.resampler
         )

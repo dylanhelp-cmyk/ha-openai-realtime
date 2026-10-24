@@ -365,7 +365,7 @@ class CalibrationStore:
                 "interface": settings.airplay_interface,
                 "encryption": settings.airplay_encryption,
                 "microphone": getattr(device, "identity", ""),
-                "reference_version": 1,
+                "reference_version": 2,
                 **(
                     {"render_lead_ms": settings.airplay_render_lead_ms}
                     if settings.airplay_render_lead_ms != 2000

@@ -31,7 +31,7 @@ class RenderLeadTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 self.settings(airplay_render_lead_ms=value).validate()
 
-    def test_default_preserves_old_airplay_profile_and_nondefault_is_separate(self):
+    def test_new_startup_profile_and_nondefault_lead_are_separate(self):
         settings, mic = self.settings(), SimpleNamespace(identity="mic")
         original = {
             "output": "airplay",
@@ -42,7 +42,7 @@ class RenderLeadTests(unittest.TestCase):
             "interface": "",
             "encryption": True,
             "microphone": "mic",
-            "reference_version": 1,
+            "reference_version": 2,
         }
         self.assertEqual(CalibrationStore.target(settings, mic), original)
         low = replace(settings, airplay_render_lead_ms=250)

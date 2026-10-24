@@ -138,11 +138,15 @@ class AirPlayTests(unittest.IsolatedAsyncioTestCase):
         with first, second:
             try:
                 await sender.start()
-                # One 20ms seed plus one second of mono at 24k => stereo44.1k.
+                prime_frames = len(rig.chunks)
+                self.assertGreaterEqual(prime_frames, 5)
+                # Bounded prefill plus paced startup silence, then one second.
                 for _ in range(50):
                     await sender.write(TONE)
                 audio = b"".join(rig.chunks)
-                self.assertAlmostEqual(len(audio) / 4 / 44100, 1.02, delta=2 / 44100)
+                self.assertAlmostEqual(
+                    len(audio) / 4 / 44100, 1 + prime_frames * 0.02, delta=2 / 44100
+                )
                 self.assertEqual(
                     audioop.tomono(audio, 2, 1, 0), audioop.tomono(audio, 2, 0, 1)
                 )
@@ -204,6 +208,30 @@ class AirPlayTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(sender.folder)
         self.assertIsNone(sender.command_fd)
         self.assertEqual(rig.returncode, 0)
+
+    async def test_pcm_keeps_flowing_during_delayed_start_ack(self):
+        rig = SenderRig(acknowledge=False)
+        sender = AirPlayOutput(self.settings())
+        first, second = rig.patches()
+        with first, second:
+            task = asyncio.create_task(sender.start())
+            try:
+                await until(lambda: any(b"ACTION=START" in c for c in rig.commands))
+                before = len(rig.chunks)
+                await asyncio.sleep(0.1)
+                self.assertGreater(len(rig.chunks), before)
+                self.assertFalse(any(any(c) for c in rig.chunks))
+                self.assertFalse(sender.ready.is_set())
+                rig.stdout.feed_data(b"[STATUS] started at_unix_ms=0\n")
+                await task
+                self.assertTrue(sender.ready.is_set())
+            finally:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+                await sender.close()
+            count = len(rig.chunks)
+            await asyncio.sleep(0.04)
+            self.assertEqual(len(rig.chunks), count)
 
     async def test_stalled_pcm_pipe_fails_instead_of_accumulating_audio(self):
         rig, sender = SenderRig(), AirPlayOutput(self.settings())

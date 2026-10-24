@@ -173,6 +173,11 @@ class LiveWebRTC:
         await self.pc.setRemoteDescription(
             RTCSessionDescription(sdp=transport["sdp"], type="answer")
         )
+        # HTTP creation already configured/started this session. Media tracks
+        # flow as soon as negotiated, as in the official browser example;
+        # only application commands wait for session.started. Do not hold
+        # captured mic audio behind the later control-ready event as well.
+        self.ready.set()
         await self.channel_ready.wait()
         self.peer_ms = (time.monotonic() - remote_at) * 1000
         return self
