@@ -1,7 +1,26 @@
-# GPT-Live Voice Agent 1.2.1
+# GPT-Live Voice Agent 1.2.2
 
 Wake → microphone starts immediately → GPT-Live streams the configured greeting → conversation → quiet timeout closes the paid session.
 No wake chime, no manual turn commits, and no always-connected OpenAI session.
+
+## Upgrade from 1.2.1: startup timing breakdown
+
+Update the add-on to **1.2.2**. No firmware flash, configuration change or recalibration is required. Normal INFO logs now separate connection setup, session readiness, first received PCM and first speech handed to the output. This adds diagnostics; it does not change buffering, connection lifetime or audio pacing.
+
+Each line includes `wake=<number>` to group one device's wake. `since_wake` and first-audio/handoff totals share the instant the backend received that wake, including cleanup of any previous session and local AEC setup. They exclude the time spent detecting the wake word on the ESP32 and sending its wake message.
+
+| Log / field | What is measured |
+| --- | --- |
+| `GPT-Live WebSocket connected in ... ms` | The `ws_connect` call: combined DNS, connection setup, TLS and WebSocket upgrade, including any connector wait. These components are not split individually. |
+| `before_connect` | Wake received to beginning the OpenAI connection; includes local setup and any previous-session cleanup. |
+| `GPT-Live session started ... config=... session_init=...` | `config` builds the local session configuration. `session_init` starts immediately before sending `session.start` and ends on validated `session.started`; it includes sending, network transit and OpenAI initialization. The original total after `started in` retains its session-construction baseline; use `since_wake` for the shared total. |
+| `GPT-Live first audio received ... after_ready=...` | First nonempty, valid PCM delta, including PCM silence if supplied by the model. `after_ready` measures the wait after session readiness; it includes greeting delivery, generation and network transit. Empty deltas do not count. |
+| `Conversation speaker stream fetched ... encoder_ready=... player_state=... play_to_fetch=...` | Time to encoder/prebuffer readiness, the HA player-state query, then the interval from scheduling `play_media` to the first real HTTP stream fetch. The fetch's recorded timestamp avoids counting later log scheduling. |
+| `Conversation first speech handed to ... output_queue=...` | First frame above the existing output silence threshold handed to the MP3 encoder or Voice PE. `output_queue` measures its wait from enqueue through handoff. Keepalive silence does not count; this logs once per conversation. |
+
+OpenAI and speaker startup run in parallel, so their totals must not be added. HTTP fetch and encoder/device handoff do not measure audible sound in the room: encoding, network, decoding and player buffers may still add delay. The saved AEC calibration measures a different speaker-to-microphone round trip; it is not automatically added to these timings. Startup failures include their last phase and elapsed time. No prompts, credentials, transcript text or audio payloads are added to these logs.
+
+To investigate a slow wake, paste the five lines beginning `GPT-Live WebSocket connected`, `GPT-Live session started`, `GPT-Live first audio received`, `Conversation speaker stream fetched`, and `Conversation first speech handed`, retaining their timestamps. Also note the approximate time from saying the wake word to hearing the greeting.
 
 ## Upgrade from 1.2.0: low calibration correlation
 

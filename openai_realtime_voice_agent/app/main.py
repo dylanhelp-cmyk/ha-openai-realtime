@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 
 import aiohttp
 from aiohttp import web
@@ -96,6 +97,7 @@ class VoiceBridge:
                     continue
                 kind = event.get("type")
                 if kind == "wake":
+                    wake_started_at = time.monotonic()
                     await stop()
                     wake_id = event.get("wake_id", 0)
                     device.wake_id = (
@@ -145,6 +147,7 @@ class VoiceBridge:
                             self.server,
                             self.token,
                             calibration_store=self.calibration_store,
+                            wake_started_at=wake_started_at,
                         )
                     self.sessions.add(session)
                     runner = asyncio.create_task(session.run())

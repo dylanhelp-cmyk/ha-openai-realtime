@@ -20,10 +20,22 @@ LIVE_URL = "wss://api.openai.com/v1/live/sessions"
 
 class LiveSession:
     def __init__(
-        self, settings, device, http, tools, audio_server, token, calibration_store=None
+        self,
+        settings,
+        device,
+        http,
+        tools,
+        audio_server,
+        token,
+        calibration_store=None,
+        wake_started_at=None,
     ):
         self.s, self.device, self.http, self.tools = settings, device, http, tools
         self.audio_server, self.token = audio_server, token
+        self.wake_started_at = (
+            time.monotonic() if wake_started_at is None else wake_started_at
+        )
+        self.wake_id = device.wake_id
         self.input = InputAudio(settings.input_buffer_ms)
         self.echo = EchoProcessor(settings, device, calibration_store)
         self.ws = None
@@ -31,6 +43,8 @@ class LiveSession:
         self.closed = False
         self.failed = False
         self.started = time.monotonic()
+        self.ready_at = None
+        self.first_audio_at = None
         self.last_activity = self.started
         self.last_user_voice = self.started
         self.first_output = False
@@ -50,6 +64,7 @@ class LiveSession:
             self.listening,
             self.fail,
             token,
+            wake_started_at=self.wake_started_at,
         )
         self.output.on_reference = self.echo.reference
 
@@ -104,19 +119,33 @@ class LiveSession:
             await self.ws.send_json(event)
 
     async def run(self):
+        stage = "websocket"
         try:
             if self.failed or self.closed:
                 return
             async with asyncio.timeout(self.s.session_start_timeout_s):
+                connect_started_at = time.monotonic()
                 self.ws = await self.http.ws_connect(
                     LIVE_URL,
                     headers={"Authorization": f"Bearer {self.s.openai_api_key}"},
                     heartbeat=20,
                     max_msg_size=4 * 1024 * 1024,
                 )
+                connected_at = time.monotonic()
+                log.info(
+                    "GPT-Live WebSocket connected in %.0f ms (wake=%d, before_connect=%.0f ms, since_wake=%.0f ms; DNS/TCP/TLS/upgrade combined)",
+                    (connected_at - connect_started_at) * 1000,
+                    self.wake_id,
+                    (connect_started_at - self.wake_started_at) * 1000,
+                    (connected_at - self.wake_started_at) * 1000,
+                )
                 if self.failed or self.closed:
                     return
+                stage = "session_config"
+                config_started_at = time.monotonic()
                 config, greeting = self.session_config()
+                session_start_at = time.monotonic()
+                stage = "session_init"
                 await self.send({"type": "session.start", "session": config})
                 first = await self.ws.receive()
                 if first.type != aiohttp.WSMsgType.TEXT:
@@ -126,11 +155,17 @@ class LiveSession:
                     raise RuntimeError(
                         "Live session rejected; check API access, voice and backend model"
                     )
+            self.ready_at = time.monotonic()
             self.ready.set()
-            self.last_activity = time.monotonic()
+            self.last_activity = self.ready_at
+            stage = "running"
             log.info(
-                "GPT-Live session started in %.0f ms",
-                (time.monotonic() - self.started) * 1000,
+                "GPT-Live session started in %.0f ms (wake=%d, config=%.0f ms, session_init=%.0f ms, since_wake=%.0f ms)",
+                (self.ready_at - self.started) * 1000,
+                self.wake_id,
+                (session_start_at - config_started_at) * 1000,
+                (self.ready_at - session_start_at) * 1000,
+                (self.ready_at - self.wake_started_at) * 1000,
             )
             self.tasks = [
                 asyncio.create_task(self._input_pump()),
@@ -153,7 +188,13 @@ class LiveSession:
             raise
         except Exception as exc:
             # API responses can contain user/tool text. Log only the exception type.
-            log.error("GPT-Live session failed (%s)", type(exc).__name__)
+            log.error(
+                "GPT-Live session failed (%s; wake=%d, stage=%s, since_wake=%.0f ms)",
+                type(exc).__name__,
+                self.wake_id,
+                stage,
+                (time.monotonic() - self.wake_started_at) * 1000,
+            )
             await self.device.send(
                 {
                     "type": "error",
@@ -170,6 +211,19 @@ class LiveSession:
             if len(audio) % 2:
                 raise ValueError("Invalid PCM output alignment")
             if audio:
+                if self.first_audio_at is None:
+                    self.first_audio_at = time.monotonic()
+                    after_ready = (
+                        f"{(self.first_audio_at - self.ready_at) * 1000:.0f}"
+                        if self.ready_at is not None
+                        else "n/a"
+                    )
+                    log.info(
+                        "GPT-Live first audio received in %.0f ms (wake=%d, after_ready=%s ms; received PCM, not speaker playback)",
+                        (self.first_audio_at - self.wake_started_at) * 1000,
+                        self.wake_id,
+                        after_ready,
+                    )
                 await self.output.write(audio)
         elif kind in {
             "session.input_transcript.delta",

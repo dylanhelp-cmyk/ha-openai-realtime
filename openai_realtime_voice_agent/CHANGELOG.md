@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.2 — Startup timing diagnostics
+
+- Split OpenAI startup into combined WebSocket connection time, local configuration, session initialization and first received audio after readiness. Include the last phase and elapsed time on failure.
+- Break speaker startup into encoder/prebuffer preparation, HA state lookup and playback-request-to-fetch time. Log the first speech frame handed to the encoder/device and its output queue wait, once per conversation.
+- Correlate startup lines by wake generation and a shared backend wake-receipt clock. Distinguish received PCM, HTTP fetch and output handoff from physical audible playback. Keep all existing streaming, AEC and session policies unchanged; no firmware update or configuration changes are required.
+
 ## 1.2.1 — Reliable calibration with independent audio clocks
 
 - Fix low calibration scores from whole-waveform phase/clock mismatch. Compare voice-band spectral envelopes and require all three sweeps to agree on delay; retain precise waveform alignment when reliable, otherwise use 4 ms spectral alignment.

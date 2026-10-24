@@ -16,7 +16,17 @@ log = logging.getLogger(__name__)
 
 class SpeechOutput:
     def __init__(
-        self, settings, device, http, audio_server, on_start, on_end, on_error, token
+        self,
+        settings,
+        device,
+        http,
+        audio_server,
+        on_start,
+        on_end,
+        on_error,
+        token,
+        *,
+        wake_started_at=None,
     ):
         self.s, self.device, self.http, self.server = (
             settings,
@@ -39,6 +49,12 @@ class SpeechOutput:
         self.command = None
         self.tail = None
         self.started = time.monotonic()
+        self.wake_started_at = (
+            self.started if wake_started_at is None else wake_started_at
+        )
+        self.wake_id = device.wake_id
+        self.first_speech_queued_at = None
+        self.first_speech_sent = False
         self.on_reference = None
         self.worker = asyncio.create_task(self._run())
 
@@ -55,6 +71,8 @@ class SpeechOutput:
             frame = bytes(self.buffer[:FRAME_BYTES])
             del self.buffer[:FRAME_BYTES]
             loud = dbfs(frame) > self.s.output_silence_threshold_db
+            if loud and self.first_speech_queued_at is None:
+                self.first_speech_queued_at = time.monotonic()
             self.frames.append((frame, loud))
             self.pending_speech += int(loud)
         limit = max(1, self.s.output_buffer_ms // 20)
@@ -90,7 +108,9 @@ class SpeechOutput:
         resource = self.encoder.resource
         async with asyncio.timeout(self.s.tts_stream_start_timeout_s):
             await self.encoder.ready()
+            encoder_ready_at = time.monotonic()
             baseline = await self._ha("GET", f"states/{self.s.tts_media_player}")
+            play_requested_at = time.monotonic()
             self.requested = True
             # Some announcement services wait for playback to end. Do not wait
             # for that service response before allowing this live stream to run.
@@ -123,9 +143,17 @@ class SpeechOutput:
             finally:
                 fetched.cancel()
                 await asyncio.gather(fetched, return_exceptions=True)
+        fetched_at = resource.first_fetch_at
+        if fetched_at is None:
+            fetched_at = time.monotonic()
         log.info(
-            "Conversation speaker stream fetched in %.0f ms",
-            (time.monotonic() - self.started) * 1000,
+            "Conversation speaker stream fetched in %.0f ms (wake=%d, encoder_ready=%.0f ms, player_state=%.0f ms, play_to_fetch=%.0f ms, since_wake=%.0f ms; HTTP fetch, not audible playback)",
+            (fetched_at - self.started) * 1000,
+            self.wake_id,
+            (encoder_ready_at - self.started) * 1000,
+            (play_requested_at - encoder_ready_at) * 1000,
+            (fetched_at - play_requested_at) * 1000,
+            (fetched_at - self.wake_started_at) * 1000,
         )
         await self.command
         await resource.finished.wait()
@@ -201,6 +229,16 @@ class SpeechOutput:
                     await self.encoder.write(frame)
                 else:
                     await self.device.audio(frame)
+                if loud and not self.first_speech_sent:
+                    self.first_speech_sent = True
+                    sent_at = time.monotonic()
+                    log.info(
+                        "Conversation first speech handed to %s in %.0f ms (wake=%d, output_queue=%.0f ms; handoff, not audible playback)",
+                        "MP3 encoder" if self.encoder else "Voice PE",
+                        (sent_at - self.wake_started_at) * 1000,
+                        self.wake_id,
+                        (sent_at - self.first_speech_queued_at) * 1000,
+                    )
                 deadline += 0.02
                 if time.monotonic() - deadline > 0.1:
                     deadline = time.monotonic()

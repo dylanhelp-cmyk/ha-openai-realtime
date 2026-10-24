@@ -7,6 +7,7 @@ This fork now uses **GPT-Live 1**, with a separate Responses backend for Home As
 - Choose continuous Voice PE PCM or one continuous HTTP MP3 stream per conversation to a Home Assistant media player.
 - Keep full-duplex capture through replies; calibrate external-speaker echo delay and tune cancellation, buffers and idle timeout.
 - OpenAI stays disconnected between conversations; existing Assist permissions are preserved.
+- Startup logs separate OpenAI connection/session timing, first audio and speaker handoff.
 
 Install this repository through the Home Assistant app/add-on store. Existing installations retain the `openai_realtime_voice_agent` slug and their working device port.
 
