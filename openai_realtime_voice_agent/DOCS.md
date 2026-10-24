@@ -1,7 +1,35 @@
-# GPT-Live Voice Agent 1.2.2
+# GPT-Live Voice Agent 1.2.3
 
 Wake → microphone starts immediately → GPT-Live streams the configured greeting → conversation → quiet timeout closes the paid session.
 No wake chime, no manual turn commits, and no always-connected OpenAI session.
+
+## Compare playback paths (1.2.3)
+
+Update the add-on to **1.2.3**; keep firmware **2.0.0** and the current device YAML. This one-shot diagnostic plays the same three sweeps through your selected external media player and then through the Voice PE's local speaker. During the external trial a software reference decoder also reads the **same live HTTP/MP3 stream** over loopback. No extra reference speaker or browser is required. No OpenAI session is created, no raw audio is saved, and **the existing AEC calibration is never overwritten**, including on successful diagnostic measurements.
+
+1. Leave the WiiM awake, keep its normal source/group arrangement and volume, and stop other sounds. Ensure the Voice PE's local speaker can be heard. Do not move the microphone between trials.
+2. Merge into the add-on configuration, save and restart:
+
+   ```yaml
+   aec_calibrate_on_next_wake: false
+   playback_diagnostic_on_next_wake: true
+   ```
+
+3. Say **Hey Jarvis** and keep quiet. Expect three external-speaker sweeps, a pause, then three local Voice PE sweeps. With the default delay search, allow roughly 20 seconds. The software decoder starts only after the real speaker fetch; it cannot signal player readiness or hide a real-speaker disconnect. Stop/mute/new wake cancels the diagnostic.
+4. Paste the lines containing `Playback diagnostic` and `Playback comparison`, especially the final `Playback comparison RESULT` line. They report:
+
+   | Field | Meaning |
+   | --- | --- |
+   | `external_roundtrip_ms` | Paced PCM reference → HTTP MP3 → external speaker → Voice PE microphone return. Same measurement method as normal calibration. |
+   | `software_http_mp3_ms` | Paced PCM reference → real MP3 encoder → internal HTTP reader → software decoder, until the matching decoded block is available. A median across three probe anchors; this includes the reference decoder's own latency. |
+   | `voice_pe_roundtrip_ms` | Paced PCM reference → device WebSocket/local speaker → microphone return. Includes the Voice PE's own playback path and a different acoustic path, rather than isolating microphone latency alone. |
+   | `external_minus_software_ms` | External round trip minus software reference. Remaining LAN/player/acoustic/microphone-return time, **not** an exact measurement of WiiM buffering alone. |
+
+5. Set `playback_diagnostic_on_next_wake: false` before later restarts. It is one-shot per add-on start; subsequent wakes are already normal conversations.
+
+For example, a software reference and local Voice PE path measured in tens/hundreds of milliseconds alongside a 3000 ms external return would place most of the delay in the external delivery/player path. A slow software reference would instead point toward encoding/HTTP/decoder processing. These are comparisons, not a unique decomposition of every hardware or network delay; local and external acoustic paths and decoder implementations differ. Decoder chunks are timestamped at actual availability rather than assigning buffered reads an invented real-time clock. The 20 ms read size bounds block granularity under steady delivery; inconsistent anchor timing is rejected.
+
+If the local Voice PE result is `unavailable`, its hardware AEC may have suppressed its own tones, or the local speaker may be too quiet. It is never treated as zero latency or used to replace the external AEC offset. Other failed/weak/noisy/clipped measurements are also `unavailable`; the usable measurements remain in the summary. Ordinary calibration and GPT-Live streaming are unchanged when the diagnostic flag is off.
 
 ## Upgrade from 1.2.1: startup timing breakdown
 

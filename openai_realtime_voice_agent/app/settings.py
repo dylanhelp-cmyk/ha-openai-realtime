@@ -69,6 +69,7 @@ class Settings:
     aec_suppression_active_db: int = -8
     aec_log_stats: bool = False
     aec_calibrate_on_next_wake: bool = False
+    playback_diagnostic_on_next_wake: bool = False
     aec_calibration_max_delay_ms: int = 5000
     aec_calibration_min_confidence: float = 0.35
     aec_calibration_level: float = 0.15
@@ -141,13 +142,20 @@ class Settings:
             raise ValueError(
                 "AEC filter must exceed its alignment margin by at least 20 ms"
             )
-        if self.aec_calibrate_on_next_wake and self.tts_output != "media_player":
-            raise ValueError("Echo calibration requires external media_player output")
+        if (
+            self.aec_calibrate_on_next_wake or self.playback_diagnostic_on_next_wake
+        ) and self.tts_output != "media_player":
+            raise ValueError(
+                "Echo calibration/playback diagnostic requires external media_player output"
+            )
+        if self.aec_calibrate_on_next_wake and self.playback_diagnostic_on_next_wake:
+            raise ValueError("Arm either calibration or playback diagnostic, not both")
         for key in (
             "aec_enabled",
             "aec_auto_delay",
             "aec_log_stats",
             "aec_calibrate_on_next_wake",
+            "playback_diagnostic_on_next_wake",
         ):
             if type(getattr(self, key)) is not bool:
                 raise ValueError(f"{key} must be true or false")

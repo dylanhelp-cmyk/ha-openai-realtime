@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.3 — Controlled playback-path comparison
+
+- Add a one-shot next-wake diagnostic: compare the external speaker's measured return with a software decoder reading the actual HTTP/MP3 stream, then test local Voice PE PCM playback using the same sweeps and microphone.
+- Preserve saved AEC calibration in every diagnostic outcome and avoid opening an OpenAI session. Keep both physical trials in one device session; support Stop and one-shot routing back to normal conversations.
+- Bound captures and decoder lifetime. Keep the internal HTTP observer separate from real player readiness and reader/disconnection state.
+- Report numeric timings, reference-decoder variation and unavailable measurements. Explain that the comparison does not uniquely isolate WiiM buffering or microphone latency, and that local hardware AEC may suppress its test tones. No firmware update required.
+
 ## 1.2.2 — Startup timing diagnostics
 
 - Split OpenAI startup into combined WebSocket connection time, local configuration, session initialization and first received audio after readiness. Include the last phase and elapsed time on failure.

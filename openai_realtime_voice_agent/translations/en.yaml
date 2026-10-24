@@ -212,6 +212,12 @@ configuration:
       short test sweeps through the normal continuous speaker stream. No OpenAI connection is made for
       this test. A clear measurement is saved for aec_delay_ms: -1; later wakes are normal conversations.
       Turn this off before future restarts unless another test is wanted.'
+  playback_diagnostic_on_next_wake:
+    name: Compare playback paths on next wake
+    description: Run one local diagnostic with the external speaker, an HTTP/MP3 software decoder,
+      then the Voice PE speaker. Six tones total; keep quiet. No OpenAI connection is made and no
+      AEC calibration is saved. Turn regular calibration off when using this, and turn this off
+      before future restarts. Local hardware AEC may make the Voice PE result unavailable.
   aec_calibration_max_delay_ms:
     name: Calibration delay search limit (ms)
     description: Maximum speaker-to-microphone delay to search, default 5000 ms. The test listens this

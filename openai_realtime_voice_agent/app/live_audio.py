@@ -103,6 +103,10 @@ class AudioHTTPServer:
         await resource.abort()
 
     async def _serve(self, request):
+        observer = (
+            request.remote in {"127.0.0.1", "::1"}
+            and request.headers.get("X-Playback-Diagnostic") == "loopback"
+        )
         resource = self.resources.get(request.match_info["name"])
         if resource is None or resource.aborted:
             raise web.HTTPNotFound()
@@ -135,7 +139,8 @@ class AudioHTTPServer:
             offset = max(offset, resource.total_bytes - 4096)
         response = web.StreamResponse(headers=headers)
         await response.prepare(request)
-        resource.readers += 1
+        if not observer:
+            resource.readers += 1
         try:
             while True:
                 async with resource.changed:
@@ -153,7 +158,7 @@ class AudioHTTPServer:
                 if resource.aborted:
                     break
                 if chunk:
-                    if resource.first_fetch_at is None:
+                    if not observer and resource.first_fetch_at is None:
                         resource.first_fetch_at = time.monotonic()
                         resource.fetched.set()
                     async with asyncio.timeout(5):
@@ -165,9 +170,10 @@ class AudioHTTPServer:
         except (ConnectionError, asyncio.TimeoutError):
             pass
         finally:
-            resource.readers -= 1
-            if not resource.readers:
-                resource.last_reader_left_at = time.monotonic()
+            if not observer:
+                resource.readers -= 1
+                if not resource.readers:
+                    resource.last_reader_left_at = time.monotonic()
         return response
 
     async def close(self):

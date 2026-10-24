@@ -7,6 +7,7 @@ import time
 import numpy as np
 
 from app.echo import ClockedFrames, ReferenceHistory, measure_delay, pcm
+from app.diagnostic_audio import MP3Loopback, measure_loopback
 from app.output import SpeechOutput
 
 log = logging.getLogger(__name__)
@@ -30,7 +31,19 @@ def calibration_probe(level=0.15):
 class CalibrationSession:
     """Same device/microphone/output lifecycle as LiveSession; no OpenAI connection."""
 
-    def __init__(self, settings, device, http, audio_server, token, store):
+    def __init__(
+        self,
+        settings,
+        device,
+        http,
+        audio_server,
+        token,
+        store,
+        *,
+        save_result=True,
+        end_device=True,
+        software_loopback=False,
+    ):
         self.s, self.device, self.store = settings, device, store
         self.closed = False
         self.failed = asyncio.Event()
@@ -39,6 +52,11 @@ class CalibrationSession:
         self.history = ReferenceHistory()
         self.reference_frames = []
         self.mic_frames = []
+        self.save_result, self.end_device = save_result, end_device
+        self.software_loopback = software_loopback
+        self.loopback = None
+        self.result = self.loopback_result = None
+        self.http = http
         self.output = SpeechOutput(
             settings,
             device,
@@ -90,16 +108,30 @@ class CalibrationSession:
     async def run(self):
         try:
             log.info(
-                "Echo calibration armed: keep quiet; three short tones will play through %s. No audio is sent to OpenAI.",
-                self.s.tts_media_player,
+                "%s armed: keep quiet; three short tones will play through %s. No audio is sent to OpenAI.",
+                "Echo calibration" if self.save_result else "Playback diagnostic",
+                self.s.tts_media_player if self.output.server else "Voice PE local PCM",
             )
             await self.device.mic(True)  # Calibration always captures through playback.
-            async with asyncio.timeout(self.s.tts_stream_start_timeout_s + 1):
-                while (
-                    not self.output.encoder
-                    or not self.output.encoder.resource.fetched.is_set()
-                ):
-                    await self.pause(0.02)
+            if self.output.server:
+                async with asyncio.timeout(self.s.tts_stream_start_timeout_s + 1):
+                    while (
+                        not self.output.encoder
+                        or not self.output.encoder.resource.fetched.is_set()
+                    ):
+                        await self.pause(0.02)
+            if self.software_loopback:
+                self.loopback = MP3Loopback(
+                    self.http, self.output.server, self.output.encoder.resource
+                )
+                try:
+                    await self.loopback.start()
+                except Exception as exc:
+                    log.warning(
+                        "Playback diagnostic software reference unavailable (%s)",
+                        type(exc).__name__,
+                    )
+                    await self.loopback.stop()
             await self.pause(0.3)
             probe = calibration_probe(self.s.aec_calibration_level)
             began = time.monotonic()
@@ -112,6 +144,29 @@ class CalibrationSession:
             # speaker buffer before measuring, including the longest searched lag.
             await self.pause(self.s.aec_calibration_max_delay_ms / 1000 + 0.5)
             await self.device.mic(False)
+            if self.loopback:
+                await self.loopback.stop()
+                if self.loopback.ready.is_set() and not self.loopback.failed.is_set():
+                    try:
+                        self.loopback_result = await asyncio.to_thread(
+                            measure_loopback,
+                            probe,
+                            tuple(self.reference_frames),
+                            tuple(self.loopback.chunks),
+                            self.s.aec_calibration_min_confidence,
+                        )
+                        if self.closed:
+                            return
+                        log.info(
+                            "Playback diagnostic software HTTP/MP3 reference: delay=%d ms, spread=%d ms (decoded block available; not physical playback)",
+                            self.loopback_result["delay_ms"],
+                            self.loopback_result["spread_ms"],
+                        )
+                    except Exception as exc:
+                        log.warning(
+                            "Playback diagnostic software reference unavailable: %s",
+                            exc,
+                        )
             await self.output.close()
             if self.failed.is_set():
                 raise RuntimeError(self.failure)
@@ -124,6 +179,17 @@ class CalibrationSession:
             )
             if self.closed:
                 return  # Stop/new wake cannot persist a stale measurement.
+            self.result = result
+            if not self.save_result:
+                log.info(
+                    "Playback diagnostic %s MEASURED: delay=%.2f ms, confidence=%.3f, sweep_min=%.3f, spread=%.0f ms; AEC calibration unchanged",
+                    "external speaker" if self.output.server else "Voice PE local PCM",
+                    result["delay_ms"],
+                    result["confidence"],
+                    result["sweep_min_confidence"],
+                    result["delay_spread_ms"],
+                )
+                return
             self.store.save(self.s, self.device, result)
             log.info(
                 "Echo calibration SAVED: delay=%.2f ms, confidence=%.3f, peak_ratio=%.2f, method=%s, waveform=%.3f, spectral=%.3f, sweep_min=%.3f, spread=%.0f ms, mic_rms=%.0f, mic_peak=%.0f. aec_delay_ms: -1 uses this on the next conversation.",
@@ -150,13 +216,20 @@ class CalibrationSession:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            log.warning("Echo calibration NOT saved: %s", exc)
-            await self.device.send(
-                {
-                    "type": "error",
-                    "message": "Echo calibration failed; see add-on log. Previous calibration is unchanged.",
-                }
+            log.warning(
+                "%s: %s",
+                "Echo calibration NOT saved"
+                if self.save_result
+                else "Playback diagnostic stage unavailable",
+                exc,
             )
+            if self.save_result:
+                await self.device.send(
+                    {
+                        "type": "error",
+                        "message": "Echo calibration failed; see add-on log. Previous calibration is unchanged.",
+                    }
+                )
         finally:
             await self.close()
 
@@ -164,8 +237,12 @@ class CalibrationSession:
         if self.closed:
             return
         self.closed = True
+        if self.loopback:
+            await self.loopback.stop()
+            self.loopback.chunks.clear()
         await self.output.close()
-        await self.device.end()
+        if self.end_device:
+            await self.device.end()
         self.reference_frames.clear()
         self.mic_frames.clear()
         self.history.frames.clear()

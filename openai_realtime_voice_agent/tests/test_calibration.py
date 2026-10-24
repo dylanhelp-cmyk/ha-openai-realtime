@@ -3,6 +3,7 @@
 import asyncio
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -116,6 +117,59 @@ class CalibrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.store.load(self.settings, self.device), 111.0)
         self.assertTrue(any("NOT saved" in line for line in logs.output))
         self.assertTrue(any(event["type"] == "error" for event in self.socket.events))
+
+    async def test_diagnostic_decodes_the_real_http_mp3_without_overwriting_aec(self):
+        self.store.save(self.settings, self.device, {"delay_ms": 3020.0})
+        self.calibration.save_result = False
+        self.calibration.end_device = False
+        self.calibration.software_loopback = True
+        self.http.ws_connect = AsyncMock(side_effect=AssertionError("No OpenAI"))
+        with self.assertLogs("app.calibration", "INFO") as logs:
+            await asyncio.wait_for(self.calibration.run(), 12)
+        self.assertIsNotNone(self.calibration.result, "\n".join(logs.output))
+        self.assertIsNotNone(self.calibration.loopback_result, "\n".join(logs.output))
+        self.assertAlmostEqual(self.calibration.result["delay_ms"], 120, delta=8)
+        self.assertLess(self.calibration.loopback_result["delay_ms"], 500)
+        self.assertEqual(self.store.load(self.settings, self.device), 3020.0)
+        self.http.ws_connect.assert_not_awaited()
+        self.assertEqual(sum(path.endswith("play_media") for path in self.requests), 1)
+        self.assertFalse(any(e["type"] == "session_end" for e in self.socket.events))
+        self.assertIsNotNone(self.calibration.loopback.process.returncode)
+        self.assertFalse(self.server.resources)
+
+    async def test_local_pcm_reference_captures_mic_without_ending_between_trials(self):
+        await self.calibration.close()
+        self.store.save(self.settings, self.device, {"delay_ms": 3020.0})
+        self.socket.events.clear()
+        self.calibration = CalibrationSession(
+            replace(self.settings, tts_output="voice_pe"),
+            self.device,
+            self.http,
+            None,
+            "fake",
+            self.store,
+            save_result=False,
+            end_device=False,
+        )
+        original = self.calibration.reference
+
+        def reference(frame, stamp):
+            original(frame, stamp)
+            returned = self.calibration.reference_frames[-1][1] * 0.6
+            self.timers.append(
+                asyncio.get_running_loop().call_later(
+                    0.08, self.calibration.receive_audio, pcm(returned)
+                )
+            )
+
+        self.calibration.output.on_reference = reference
+        with self.assertLogs("app.calibration", "INFO") as logs:
+            await asyncio.wait_for(self.calibration.run(), 8)
+        self.assertIsNotNone(self.calibration.result, "\n".join(logs.output))
+        self.assertAlmostEqual(self.calibration.result["delay_ms"], 60, delta=8)
+        self.assertTrue(self.socket.audio)
+        self.assertFalse(any(e["type"] == "session_end" for e in self.socket.events))
+        self.assertEqual(self.store.load(self.settings, self.device), 3020.0)
 
     async def test_stop_discards_capture_and_never_saves_a_late_result(self):
         runner = asyncio.create_task(self.calibration.run())
