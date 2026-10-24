@@ -124,7 +124,7 @@ class LiveTests(unittest.IsolatedAsyncioTestCase):
     async def test_packet_gap_only_ends_speech_activity_not_the_transport(self):
         await self.live.output.write(TONE)
         await until(lambda: self.live.output.speaking)
-        await until(lambda: not self.live.output.active)
+        await until(lambda: not self.live.output.active and self.device.mic_enabled)
         self.assertFalse(self.live.output.worker.done())
         self.assertTrue(self.device.mic_enabled)
 
