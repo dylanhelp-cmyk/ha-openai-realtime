@@ -1,325 +1,163 @@
-# User-facing names + help for the Configuration tab. The emoji prefixes are
-# the only "grouping" HA's add-on UI supports — they match the order/groups in
-# config.yaml. Keep descriptions PRACTICAL: what it does, when to change it,
-# what value makes sense. A Dutch version lives in nl.yaml.
 configuration:
-  # --- 🔑 Basics ---
   openai_api_key:
-    name: "🔑 Basics · OpenAI API key"
-    description: >-
-      Your personal OpenAI key (starts with sk-...). Create one at
-      platform.openai.com → API keys, and make sure billing is set up.
-      Everything the assistant does — listening, thinking, speaking, web
-      search — runs on this key.
+    name: OpenAI API key
+    description: Project key with GPT-Live and your chosen Responses backend enabled. Kept in the add-on;
+      never sent to the Voice PE or speaker.
   instructions:
-    name: "🔑 Basics · Assistant personality (system prompt)"
-    description: >-
-      Plain-text instructions that shape the assistant: its personality, its
-      language, and your house rules. Write it like you'd brief a person. Two
-      tips that matter on a voice device: lock the language ("Speak and
-      understand only Dutch. Never switch language.") and tell it to use its
-      tools silently instead of saying "one moment". EDITING TIP: this field
-      is a single line here (a Home Assistant UI limitation) — for comfortable
-      editing use the ⋮ menu at the top of this tab → "Edit in YAML", which
-      gives you a full text editor.
-  transcription_language:
-    name: "🔑 Basics · Spoken language (e.g. nl, en, de)"
-    description: >-
-      Two-letter code of the language you speak to it. Setting it keeps the
-      assistant from drifting into other languages, AND writes what you said
-      into the add-on log (the 🗣️ lines — handy to check what it heard).
-      Leave empty for auto-detect (no user transcript in the log).
-
-  # --- 🗣️ Model & voice ---
-  openai_model:
-    name: "🗣️ Model & voice · Model"
-    description: >-
-      The OpenAI model that listens and talks. gpt-realtime-2 (default) is the
-      newest and smartest. gpt-realtime-mini is noticeably cheaper but less
-      capable. Want a model that's not listed? Pick "custom", then enable
-      "Show unused optional configuration options" at the bottom of this page
-      to reveal the custom field.
-  openai_model_custom:
-    name: "🗣️ Model & voice · Model (custom)"
-    description: >-
-      Only used when Model is set to "custom". Any valid OpenAI Realtime
-      model id. (Hidden by default — this is an expert escape hatch.)
+    name: Voice personality
+    description: GPT-Live conversation prompt. Keep the Backchannel, Interruption and Delegation policies,
+      including Generate <|SpawnThinking|> for device/tool requests. Edit as YAML for multiple lines.
+  backend_instructions:
+    name: Reasoning and device-control instructions
+    description: Task rules for the separate Responses backend. Describe how to use Home Assistant tools
+      and report failures accurately. Voice style belongs in Voice personality.
+  opening_greeting:
+    name: Opening greeting
+    description: GPT-Live is asked to speak this once after each wake, then listen. Empty disables the
+      greeting. It may paraphrase or stay silent; this is live generation, not a prerecorded clip.
+  greeting_language:
+    name: Greeting language
+    description: Language used for the opening greeting before the user has spoken, for example English.
   openai_voice:
-    name: "🗣️ Model & voice · Voice"
-    description: >-
-      The voice it speaks with. marin and cedar are the newest and sound the
-      most natural. A running conversation keeps its voice — restart the
-      add-on after changing this. For an unlisted voice pick "custom" and
-      enable "Show unused optional configuration options" at the bottom.
-  openai_voice_custom:
-    name: "🗣️ Model & voice · Voice (custom)"
-    description: >-
-      Only used when Voice is set to "custom". Any valid OpenAI voice name.
-      (Hidden by default.)
-  openai_speed:
-    name: "🗣️ Model & voice · Speaking speed"
-    description: >-
-      1.0 = normal. Lower is slower and clearer (down to 0.25), higher is
-      faster (up to 1.5). Changes only the pace, not the words.
-  max_output_tokens:
-    name: "🗣️ Model & voice · Maximum answer length"
-    description: >-
-      Caps how long an answer may get, in tokens (≈ 0.75 words each).
-      0 = no cap. Set e.g. 1024 if it sometimes rambles on; too low cuts
-      answers off mid-sentence.
-
-  # --- 💬 Conversation ---
-  follow_up_listen_seconds:
-    name: "💬 Conversation · Follow-up listening (seconds)"
-    description: >-
-      After an answer the device keeps listening this long, so you can simply
-      keep talking — no wake word needed. The LED ring shows the listening
-      colour while it waits. 8 feels natural; 0 turns it off (wake word
-      before every question).
-  follow_up_open_delay_ms:
-    name: "💬 Conversation · Follow-up mic delay (ms)"
-    description: >-
-      Short pause between the end of an answer and the microphone re-opening,
-      so the speaker's last echo can't trigger a ghost question. 700 (default)
-      covers the speaker tail safely. Lowering it (300–500) makes the
-      hand-over snappier, but risks the assistant answering its own echo —
-      raise it back if it sometimes seems to answer nobody or repeats itself.
-  wake_open_delay_ms:
-    name: "💬 Conversation · Wake mic delay (ms)"
-    description: >-
-      The same echo guard right after the wake word: a short pause after the
-      wake chime before the microphone opens, so the chime's own sound can't
-      leak in and be mistaken for a question. 700 (default) is safe. Lower it
-      for a snappier wake, raise it if saying the wake word sometimes triggers
-      an answer to nothing.
-  vad_eagerness:
-    name: "💬 Conversation · Turn-taking speed"
-    description: >-
-      How quickly the assistant decides you've finished talking. "low"
-      (default) waits patiently — best if you pause mid-sentence to think.
-      "high" answers faster but may cut you off. "auto" lets OpenAI decide.
-  phase_idle_debounce_ms:
-    name: "💬 Conversation · End-of-answer hold (ms)"
-    description: >-
-      How long the assistant must stay silent before the device considers the
-      answer finished. This bridges the natural pauses between sentences and
-      during smart-home actions, so the LED and the "stop" word keep working
-      through the whole answer. 1500 is a good default; raise it if the
-      device flips to idle in the middle of long answers.
-
-  # --- 🌐 Web search ---
+    name: Live voice
+    description: A supported GPT-Live voice name, for example cedar, marin or quartz. Takes effect on
+      the next conversation.
+  backend_model:
+    name: Reasoning backend model
+    description: Responses model for device control and reasoning, separate from gpt-live-1. Default gpt-6-luna;
+      choose a model your API project can access.
+  backend_reasoning_effort:
+    name: Backend reasoning effort
+    description: Use low for quick routine controls, or default to omit the setting. Supported values
+      depend on the backend model.
+  backend_max_output_tokens:
+    name: Backend output limit
+    description: Maximum tokens for backend reasoning and tool results. Too low can prevent a tool workflow
+      completing.
+  backend_parallel_tools:
+    name: Parallel backend tools
+    description: Allow independent tool calls together. Off runs tool calls sequentially; failed mutations
+      are never automatically retried.
   enable_web_search:
-    name: "🌐 Web search · Enable web search"
-    description: >-
-      Lets the assistant look things up online: weather, news, opening hours,
-      recent events. Each lookup is one extra OpenAI call on your key (a few
-      cents) and adds a couple of seconds. On by default.
-  web_search_model:
-    name: "🌐 Web search · Search model"
-    description: >-
-      The model that does the lookup and summarises the answer. gpt-5.5
-      (default) gives the best answers; mini/nano models are cheaper but miss
-      more. For an unlisted model pick "custom" and enable "Show unused
-      optional configuration options" at the bottom.
-  web_search_model_custom:
-    name: "🌐 Web search · Search model (custom)"
-    description: >-
-      Only used when Search model is set to "custom". Any model that supports
-      OpenAI's web_search tool. (Hidden by default.)
-
-  # --- 🎚️ Audio ---
-  tts_output:
-    name: "🎚️ Audio · Speech output"
-    description: >-
-      "voice_pe" plays replies on the Voice PE as usual. "media_player"
-      sends the same OpenAI voice to the Home Assistant speaker selected below.
-      Choose stream below to start playback while the reply is generated.
-      Restart the add-on after changing these settings. Firmware 1.3.0+ also
-      moves wake chimes to that speaker and waits before opening the microphone.
-  tts_media_player:
-    name: "🎚️ Audio · Speech media player"
-    description: >-
-      Entity ID of the speaker to use when Speech output is "media_player",
-      for example media_player.living_room. The player must support playing
-      HTTP MP3 audio, or local files through Home Assistant's media source. Spotify-only
-      players cannot play these files. Leave blank when using "voice_pe".
-  tts_announce:
-    name: "🎚️ Audio · Play speech as announcement"
-    description: >-
-      Request announcement playback, so supported players can resume their
-      previous music afterward. Support depends on the player integration.
-      Turn off to use ordinary playback, which replaces the current media.
-      For WiiM Audio, configure Audio HTTP address below to use announcements.
-      Previous assistant audio is replaced rather than resumed as music.
-  tts_delivery:
-    name: "Audio · External delivery"
-    description: >-
-      "stream" starts the selected speaker while OpenAI is still generating
-      the reply. "buffered" waits for each whole audio segment. Stream requires
-      Audio HTTP address. Save and restart after changing these settings.
-  tts_stream_base_url:
-    name: "Audio · Audio HTTP address"
-    description: >-
-      Address the speaker uses to fetch this add-on's audio, for example
-      http://192.168.1.100:18082 using YOUR Home Assistant LAN IP. The port must
-      match Audio HTTP port below. Use an IP rather than a .local hostname for
-      WiiM. Leave empty for the original Home Assistant media-source file path.
-      This address works with both stream and buffered delivery.
-  tts_stream_port:
-    name: "Audio · Audio HTTP port"
-    description: >-
-      Port serving temporary audio to your network speaker (default 18082).
-      Choose a free port and use the same number in Audio HTTP address.
-      This is separate from the existing Voice PE device port.
-  tts_stream_prebuffer_ms:
-    name: "Audio · Stream prebuffer (ms)"
-    description: >-
-      Encoded audio collected before requesting live playback. Start at 120.
-      Lower starts sooner; raise to 250–500 if network playback stutters.
-      Unlike the Voice PE playback buffer, this affects external speakers.
-  tts_stream_start_timeout_s:
-    name: "Audio · Speaker fetch timeout (seconds)"
-    description: >-
-      How long to wait for the speaker to fetch its audio URL. This is a
-      failure timeout, not a delay added to every successful turn. A timeout
-      usually means the Audio HTTP address or port cannot be reached.
-  tts_completion_mode:
-    name: "Audio · Playback completion"
-    description: >-
-      "auto" uses known duration from the real HTTP fetch when Audio HTTP is
-      configured, avoiding slow player-state updates. "duration" always uses
-      duration. "state" uses Home Assistant playback state with a bounded
-      fallback. For WiiM, start with auto and tune Speaker startup allowance.
-  tts_start_allowance_ms:
-    name: "Audio · Speaker startup allowance (ms)"
-    description: >-
-      Extra time for the speaker's internal playback buffer, added to the
-      audio duration when deciding it has finished. Start at 300. Reduce if
-      the microphone opens late; increase if it opens while audio is still
-      audible. Applies to both wake chimes and replies.
-  tts_finish_grace_ms:
-    name: "Audio · Extra completion wait (ms)"
-    description: >-
-      Maximum extra wait for Home Assistant to report playback completion in
-      state-based playback. Default 1500. This does not slow the HTTP duration
-      clock used by auto mode with Audio HTTP configured.
-  tts_state_poll_ms:
-    name: "Audio · Playback state polling (ms)"
-    description: >-
-      Interval between Home Assistant state checks (default 100). A lower value
-      cannot make the integration itself refresh faster. Auto with Audio HTTP
-      avoids these checks and their delay.
-  tts_state_timeout_ms:
-    name: "Audio · Playback state request timeout (ms)"
-    description: >-
-      Limit for a single playback-state request (default 500), so a slow
-      request cannot hold up the microphone for several seconds.
-  mcp_preload_context:
-    name: "Home Assistant · Preload exposed device names"
-    description: >-
-      Read the existing Assist-exposed device catalog when the voice session
-      connects, so known-device controls can go straight to their tools.
-      This adds no required catalog call to each command. Discovery is refreshed
-      only for unknown or ambiguous names or failed lookups. No extra entities
-      are exposed. Turn off to use on-demand discovery only.
-  playback_prebuffer_ms:
-    name: "🎚️ Audio · Playback buffer (ms)"
-    description: >-
-      How much of the answer the device collects before it starts playing. A
-      bigger buffer absorbs brief Wi-Fi hiccups (the occasional crackle), but
-      every answer starts this much later. 150 is a good balance; raise to
-      250–300 if you still hear crackle, 0 = play immediately.
-  noise_reduction:
-    name: "🎚️ Audio · Microphone noise reduction"
-    description: >-
-      Extra filtering of your voice before it reaches OpenAI. "off" is
-      usually fine — the device already filters. Try "near_field" if you
-      talk close to the device, "far_field" for across the room, when it
-      mishears you in a noisy environment.
-
-  # --- 🏠 Home Assistant ---
-  ha_mcp_url:
-    name: "🏠 Home Assistant · MCP server URL"
-    description: >-
-      How the assistant controls your home. Leave EMPTY (recommended): it
-      then uses Home Assistant's built-in "MCP Server" integration — install
-      that integration and expose your entities to Assist. Only fill in a URL
-      if you run the separate ha-mcp add-on instead.
-  longlived_token:
-    name: "🏠 Home Assistant · Access token"
-    description: >-
-      Leave empty (recommended): the add-on uses its own built-in permission.
-      Only create and paste a long-lived token (your HA profile → Security)
-      if the log shows a 401/403 error at startup.
-  mcp_tool_allowlist:
-    name: "🏠 Home Assistant · Tool allow-list"
-    description: >-
-      Comma-separated list of control tools the assistant may use; empty =
-      all of them. With the built-in MCP server you can leave this empty.
-      Mainly useful with the ha-mcp add-on (80+ tools) to keep conversations
-      fast and cheap.
-
-  # --- ⚙️ Advanced ---
+    name: Web search
+    description: Give the Responses backend hosted web search. Charged separately from voice; no separate
+      search-model setting.
   websocket_port:
-    name: "⚙️ Advanced · Device port"
-    description: >-
-      The port the Voice PE connects to. Must match the va_url in the device
-      firmware (stable 8080, dev 8081). Only change this on a port clash —
-      and update the device firmware stub to match.
-  session_reuse_timeout_seconds:
-    name: "⚙️ Advanced · Conversation resume window (seconds)"
-    description: >-
-      If the device reconnects within this many seconds (Wi-Fi blip, add-on
-      restart), the conversation continues where it left off. 300 (5 min) is
-      a good default; 0 = always start fresh.
-  max_context_messages:
-    name: "⚙️ Advanced · Conversation memory size"
-    description: >-
-      How many recent exchanges the assistant remembers within a
-      conversation. More = better memory, but every answer re-bills the whole
-      history, so long chats get expensive and can hit OpenAI rate limits.
-      12 is a good balance; 0 = unlimited.
-  transcription_model:
-    name: "⚙️ Advanced · Transcript model"
-    description: >-
-      Only used when a spoken language is set (Basics). This model writes
-      your speech into the log as text — it does NOT affect how the assistant
-      understands you (it hears your actual voice). gpt-4o-transcribe
-      (default) is the most accurate. For an unlisted model pick "custom" and
-      enable "Show unused optional configuration options" at the bottom.
-  transcription_model_custom:
-    name: "⚙️ Advanced · Transcript model (custom)"
-    description: >-
-      Only used when Transcript model is set to "custom". (Hidden by
-      default.)
-  turn_detection_type:
-    name: "⚙️ Advanced · Turn detection (legacy)"
-    description: >-
-      How the end of your question is detected. Normally leave this UNSET:
-      the assistant then understands when your sentence is finished
-      (semantic_vad). "server_vad" is the old silence-timer method, tuned by
-      the three fields below — kept only as an escape hatch.
-  vad_threshold:
-    name: "⚙️ Advanced · server_vad: loudness threshold"
-    description: >-
-      Only with server_vad. How loud something must be to count as speech
-      (0–1, default 0.5). Higher = fewer false triggers from background
-      noise.
-  vad_prefix_padding_ms:
-    name: "⚙️ Advanced · server_vad: lead-in (ms)"
-    description: >-
-      Only with server_vad. Audio kept from just before speech was detected,
-      so your first word isn't clipped (default 300).
-  vad_silence_duration_ms:
-    name: "⚙️ Advanced · server_vad: silence to end turn (ms)"
-    description: >-
-      Only with server_vad. How long a silence ends your question (default
-      800). Raise it if you get cut off while pausing.
-
-  # --- 🔍 Debug ---
-  enable_recording:
-    name: "🔍 Debug · Record audio"
-    description: >-
-      Saves microphone and speaker audio to files inside the add-on, for
-      troubleshooting only. Leave off normally.
-
+    name: Voice PE device port
+    description: Keep your working port, for example 18081. Must match the device va_url. The add-on does
+      not change it automatically.
+  ha_mcp_url:
+    name: Home Assistant MCP address
+    description: Empty uses the built-in MCP Server at supervisor/core/api/mcp. Only entities exposed
+      to Assist are available.
+  longlived_token:
+    name: Home Assistant access token
+    description: 'Normally empty: uses the existing SUPERVISOR_TOKEN. Only needed for a custom MCP server
+      or installation without Supervisor permissions.'
+  mcp_tool_allowlist:
+    name: Allowed HA tools
+    description: Comma-separated exact tool names. Empty keeps all tools already exposed by your MCP server.
+      Does not expand Assist entity permissions.
+  mcp_preload_context:
+    name: Preload device names
+    description: Read Assist device context once at add-on startup. Known names go directly to control
+      tools, with no catalogue request before every command.
+  tts_output:
+    name: Speech output
+    description: voice_pe plays through the device; media_player streams live MP3 to your selected network
+      speaker. Wake chimes are removed in both modes.
+  tts_media_player:
+    name: Speech media player
+    description: Exact entity ID, for example media_player.living_room_speakers. Used only for media_player
+      output.
+  tts_announce:
+    name: Request announcements
+    description: Ask the player integration to restore supported music sources. Spotify Connect cannot
+      auto-resume through the current WiiM integration. Previous assistant audio is never intentionally
+      restored as music.
+  tts_stream_base_url:
+    name: Audio HTTP address
+    description: Speaker-reachable LAN base URL, for example http://192.168.1.100:18082. Required for
+      external output. Replace the IP with your HA host and keep this port on the LAN.
+  tts_stream_port:
+    name: Audio HTTP port
+    description: Free port for temporary MP3 streams, default 18082. Must match Audio HTTP address and
+      differ from the Voice PE device port.
+  tts_stream_prebuffer_ms:
+    name: Speaker stream prebuffer (ms)
+    description: MP3 collected before requesting playback. Default 120. Reduce for quicker startup; raise
+      if it stutters.
+  tts_stream_start_timeout_s:
+    name: Speaker fetch timeout (seconds)
+    description: Maximum wait for the speaker to fetch its URL. A failure timeout, not a delay added to
+      successful playback.
+  tts_start_allowance_ms:
+    name: Playback startup/tail allowance (ms)
+    description: Margin beyond audio duration before treating playback as finished. Default 300. Raise
+      if the mic opens before the last sound ends; lower if it opens late. Local and external output both
+      use this.
+  playback_prebuffer_ms:
+    name: Voice PE jitter buffer (ms)
+    description: Device-local PCM cushion. Default 100; affects Voice PE output only. New firmware reads
+      this on reconnect.
+  microphone_mode:
+    name: Microphone mode
+    description: gated closes mic during audible playback to avoid speaker echo. full_duplex keeps it
+      open for Live interruptions; experimental with external speakers because there is no shared echo-cancellation
+      reference.
+  mic_reopen_delay_ms:
+    name: Microphone echo guard (ms)
+    description: Additional quiet margin after actual playback before reopening a gated mic. No wake delay
+      or chime is added. Default 150.
+  output_silence_ms:
+    name: Speech segment silence (ms)
+    description: Continuous quiet audio that closes a speech segment. GPT-Live has no response-audio-done
+      event. Default 350; raise if short pauses split speech too much.
+  output_gap_timeout_ms:
+    name: Output packet gap (ms)
+    description: Fallback segment boundary if Live stops sending packets. Default 600. Raise for unstable
+      connections; lower only after testing.
+  output_silence_threshold_db:
+    name: Output silence threshold (dBFS)
+    description: Audio quieter than this counts as silence. Default -55. More negative retains quieter
+      speech but can treat background noise as speech.
+  input_activity_threshold_db:
+    name: Input activity threshold (dBFS)
+    description: Microphone level that refreshes the conversation idle timer. Default -42. Raise for a
+      noisy room; lower for quiet voices. This is not a server VAD setting.
+  input_buffer_ms:
+    name: Startup microphone buffer (ms)
+    description: Bounded capture while connecting to Live. Default 600. Increase if immediate words are
+      lost during slow startup; excess oldest audio is dropped and counted in logs.
+  idle_timeout_seconds:
+    name: Conversation idle timeout (seconds)
+    description: Close the paid Live session after this much quiet, once playback and backend work are
+      finished. Default 15. A socket to the Voice PE can remain connected without Live billing.
+  max_session_seconds:
+    name: Maximum conversation (seconds)
+    description: Hard limit on a paid session, even if background noise keeps it active. Default 180;
+      wake again to start another.
+  session_start_timeout_s:
+    name: Live connection timeout (seconds)
+    description: Failure limit while starting Live. Audio capture starts on wake and is bounded by Startup
+      microphone buffer.
+  session_close_timeout_s:
+    name: Live close timeout (seconds)
+    description: Wait briefly for session.closed and final usage on normal idle closure. A forced disconnect
+      can leave final usage unconfirmed.
+  greeting_timeout_s:
+    name: Greeting diagnostic timeout (seconds)
+    description: Log if no audible greeting arrives by this time. The microphone remains available; the
+      app does not replay or repeatedly request a greeting.
+  tool_timeout_s:
+    name: Home Assistant tool timeout (seconds)
+    description: Limit for MCP discovery and each call. A failed action may have an unknown outcome; it
+      is never blindly retried.
+  audio_retention_seconds:
+    name: Temporary audio retention (seconds)
+    description: Expiry for generated speaker resources. No public file listing or HA credentials in audio
+      URLs.
+  log_transcripts:
+    name: Log conversation transcripts
+    description: Off by default. Enable only when needed for troubleshooting; user and assistant text
+      will appear in add-on logs.

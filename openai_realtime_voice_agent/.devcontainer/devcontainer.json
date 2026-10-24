@@ -1,19 +1,24 @@
 {
-  "name": "Home Assistant Add-on Development",
+  "name": "GPT-Live Add-on Development",
   "image": "ghcr.io/home-assistant/devcontainer-addon:latest",
   "features": {},
-  "forwardPorts": [7123, 8080],
+  "forwardPorts": [
+    7123,
+    8081,
+    18082
+  ],
   "portsAttributes": {
     "7123": {
-      "label": "Home Assistant",
-      "onAutoForward": "notify"
+      "label": "Home Assistant"
     },
-    "8080": {
-      "label": "WebRTC Server",
-      "onAutoForward": "ignore"
+    "8081": {
+      "label": "Voice PE WebSocket"
+    },
+    "18082": {
+      "label": "Speaker audio HTTP"
     }
   },
-  "postCreateCommand": "pip3 install -r requirements.txt",
+  "postCreateCommand": "pip3 install -e .",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -30,7 +35,3 @@
   },
   "remoteUser": "root"
 }
-
-
-
-
