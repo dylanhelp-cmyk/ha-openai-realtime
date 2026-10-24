@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.1 — Reliable calibration with independent audio clocks
+
+- Fix low calibration scores from whole-waveform phase/clock mismatch. Compare voice-band spectral envelopes and require all three sweeps to agree on delay; retain precise waveform alignment when reliable, otherwise use 4 ms spectral alignment.
+- Keep ambiguity and noise rejection, reject inconsistent sweep delays, and check clipping over the matched probe instead of diluting it with silent capture time. Do not lower the default confidence threshold.
+- Include waveform/spectral scores, sweep consistency and microphone levels in diagnostics. Previously saved delays remain compatible; no Voice PE firmware update is needed.
+- Add regressions for independent clocks, dispersive room paths, gain changes, timestamp corrections, missing sweeps, steady tones, conflicting echoes and out-of-range playback delays.
+
 ## 1.2.0 — Live echo cancellation and delay measurement
 
 - Add local SpeexDSP adaptive AEC and configurable residual suppression for external media-player output, preserving full-duplex input and one continuous output stream.

@@ -190,6 +190,59 @@ def normalised_matches(pattern, signal):
     return np.divide(corr, denominator, out=np.zeros_like(corr), where=denominator > 1)
 
 
+def _spectral_features(samples):
+    """Phase-independent voice-band envelopes, centred every 4 ms.
+
+    Independent clocks, speaker EQ and microphone processing can destroy a
+    long chirp's sample correlation without destroying its frequency sweep.
+    Per-band scaling limits EQ/gain differences; subtracting the noise floor
+    prevents steady background sound from looking like the probe.
+    """
+    window, hop = 256, 64
+    padded = np.pad(samples, (window // 2, window // 2))
+    frames = np.lib.stride_tricks.sliding_window_view(padded, window)[::hop]
+    power = np.abs(np.fft.rfft(frames * np.hanning(window), axis=1)) ** 2
+    # 25 adjacent 125 Hz bands from 375 to 3500 Hz.
+    bands = np.sqrt(power[:, 6:56].reshape(len(frames), 25, 2).sum(axis=2))
+    bands = np.maximum(bands - np.percentile(bands, 20, axis=0), 0)
+    scale = np.maximum(np.percentile(bands, 98, axis=0), np.max(bands) * 0.02)
+    return np.minimum(bands / np.maximum(scale, 1), 2)
+
+
+def _feature_matches(pattern, signal):
+    """Normalised multiband envelope correlation at each candidate offset."""
+    if len(signal) < len(pattern) or not len(pattern):
+        return np.empty(0)
+    pattern = pattern - pattern.mean(axis=0)
+    size = 1 << (len(pattern) + len(signal) - 1).bit_length()
+    cross = np.fft.rfft(signal, size, axis=0) * np.conj(
+        np.fft.rfft(pattern, size, axis=0)
+    )
+    corr = np.fft.irfft(cross.sum(axis=1), size)[: len(signal) - len(pattern) + 1]
+    sums = np.vstack((np.zeros(signal.shape[1]), signal.cumsum(axis=0)))
+    energy = np.concatenate(([0.0], (signal * signal).sum(axis=1).cumsum()))
+    variance = (
+        energy[len(pattern) :]
+        - energy[: -len(pattern)]
+        - ((sums[len(pattern) :] - sums[: -len(pattern)]) ** 2).sum(axis=1)
+        / len(pattern)
+    )
+    denominator = np.sqrt(np.maximum(variance, 0) * np.sum(pattern * pattern))
+    return np.clip(
+        np.divide(corr, denominator, out=np.zeros_like(corr), where=denominator > 1),
+        -1,
+        1,
+    )
+
+
+def _peak(matches, radius):
+    best = int(np.argmax(matches))
+    competing = matches.copy()
+    competing[max(0, best - radius) : best + radius + 1] = 0
+    ratio = float(matches[best]) / max(float(np.max(competing)), 1e-9)
+    return best, float(matches[best]), ratio
+
+
 def measure_delay(reference_frames, mic_frames, max_delay_ms=5000, min_confidence=0.35):
     """Estimate the physical round trip from the sent reference to captured audio."""
     if not reference_frames or not mic_frames:
@@ -225,22 +278,74 @@ def measure_delay(reference_frames, mic_frames, max_delay_ms=5000, min_confidenc
     matches = np.abs(normalised_matches(probe[::decimation], signal[::decimation]))
     if not len(matches):
         raise ValueError("The test capture ended before an echo could return")
-    best = int(np.argmax(matches))
-    confidence = float(matches[best])
-    competing = matches.copy()
-    radius = round(0.08 * RATE / decimation)
-    competing[max(0, best - radius) : best + radius + 1] = 0
-    ratio = confidence / max(float(np.max(competing)), 1e-9)
-    clipped = float(np.mean(np.abs(microphone) >= 32760))
-    if confidence < min_confidence or ratio < 1.15 or clipped > 0.005:
+    best, waveform, waveform_ratio = _peak(matches, round(0.08 * RATE / decimation))
+    waveform_delay = best * decimation * 1000 / RATE
+
+    # Use the three-sweep spectral pattern for clock/phase robustness. Check
+    # each third independently as well: a single tone, speech fragment or
+    # inconsistent playback delay must not save a plausible-looking offset.
+    pattern, capture = _spectral_features(probe), _spectral_features(signal)
+    spectral_matches = _feature_matches(pattern, capture)
+    limit = math.floor(max_delay_ms / 4) + 1
+    spectral_matches = spectral_matches[:limit]
+    if not len(spectral_matches):
+        raise ValueError("The test capture ended before an echo could return")
+    spectral_best, spectral, spectral_ratio = _peak(spectral_matches, 20)
+    spectral_delay = spectral_best * 4.0
+    sweeps, delays = [], []
+    for indices in np.array_split(np.arange(len(pattern)), 3):
+        first, last = int(indices[0]), int(indices[-1]) + 1
+        candidates = _feature_matches(
+            pattern[first:last], capture[first : len(capture) - len(pattern) + last]
+        )[:limit]
+        position = int(np.argmax(candidates))
+        sweeps.append(float(candidates[position]))
+        delays.append(position * 4.0)
+    spread = max(delays + [spectral_delay]) - min(delays + [spectral_delay])
+
+    # Retain sample-level precision where the waveform itself is reliable.
+    # The spectral fallback has 4 ms resolution, within the default 20 ms
+    # adaptive-filter lead. Its score has a different meaning from waveform NCC.
+    precise = (
+        waveform >= min_confidence
+        and waveform_ratio >= 1.15
+        and abs(waveform_delay - spectral_delay) <= 20
+    )
+    delay = waveform_delay if precise else spectral_delay
+    confidence = waveform if precise else spectral
+    ratio = waveform_ratio if precise else spectral_ratio
+    matched = microphone[
+        left + round(delay * RATE / 1000) : right + round(delay * RATE / 1000)
+    ]
+    clipped = float(np.mean(np.abs(matched) >= 32760))
+    mic_rms = float(np.sqrt(np.mean(matched * matched)))
+    mic_peak = float(np.max(np.abs(matched)))
+    if (
+        spectral < min_confidence
+        or min(sweeps) < min_confidence
+        or spectral_ratio < 1.15
+        or spread > 16
+        or clipped > 0.005
+    ):
         raise ValueError(
-            f"Unreliable echo measurement (correlation={confidence:.2f}, peak_ratio={ratio:.2f}, clipped={clipped:.1%}); keep quiet, check speaker volume and repeat"
+            f"Unreliable echo measurement (correlation={waveform:.2f}, spectral={spectral:.2f}, "
+            f"candidate_delay={spectral_delay:.0f} ms, peak_ratio={spectral_ratio:.2f}, "
+            f"sweeps={'/'.join(f'{score:.2f}' for score in sweeps)}, spread={spread:.0f} ms, "
+            f"mic_rms={mic_rms:.0f}, mic_peak={mic_peak:.0f}, clipped={clipped:.1%}); "
+            "keep quiet; check mic levels and delay search range; use comfortable speaker volume"
         )
     return {
-        "delay_ms": round(best * decimation * 1000 / RATE, 2),
+        "delay_ms": round(delay, 2),
         "confidence": round(confidence, 3),
         "peak_ratio": round(ratio, 2),
         "clipped_fraction": round(clipped, 5),
+        "method": "waveform" if precise else "spectral",
+        "waveform_confidence": round(waveform, 3),
+        "spectral_confidence": round(spectral, 3),
+        "sweep_min_confidence": round(min(sweeps), 3),
+        "delay_spread_ms": round(spread, 2),
+        "mic_rms": round(mic_rms, 1),
+        "mic_peak": round(mic_peak, 1),
     }
 
 

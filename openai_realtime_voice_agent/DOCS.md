@@ -1,11 +1,19 @@
-# GPT-Live Voice Agent 1.2.0
+# GPT-Live Voice Agent 1.2.1
 
 Wake → microphone starts immediately → GPT-Live streams the configured greeting → conversation → quiet timeout closes the paid session.
 No wake chime, no manual turn commits, and no always-connected OpenAI session.
 
+## Upgrade from 1.2.0: low calibration correlation
+
+Update the add-on to **1.2.1** and repeat calibration with the same settings and a comfortable speaker volume. Keep `aec_calibration_min_confidence: 0.35`. No ESP32 flash is required. Previously saved delays remain valid; failed tests still leave them unchanged.
+
+The original whole-waveform detector could score below 0.2 even with a clean, audible return when playback and capture clocks differed slightly. Higher speaker volume cannot correct that mismatch, and can introduce clipping. The new detector also compares voice-band frequency envelopes, which tolerate clock skew, phase changes, speaker EQ and gain changes. All three sweeps must independently match and agree on delay within 16 ms, and competing delay peaks are rejected. Where reliable, waveform matching retains sample-level precision; otherwise spectral matching provides 4 ms resolution for the adaptive filter.
+
+Logs report `method`, `waveform`, `spectral`, individual sweep scores and delay spread, plus microphone RMS/peak levels (PCM16 full scale is 32768) and clipping on failure. Scores are normalised matches, not probabilities; waveform and spectral scores measure different properties. A low waveform score can now be accepted when the spectral and consistency checks pass. A low spectral score still requires investigation: check that the device hears all three sweeps, other sound is stopped, microphone levels are nonzero, and the candidate delay is inside the configured search range. Paste the full `Echo calibration NOT saved` line when seeking help; it contains numeric diagnostics, not captured audio.
+
 ## Upgrade from 1.1.0: live external-speaker echo cancellation
 
-Update the add-on to **1.2.0**. Keep Voice PE firmware **2.0.0**, the current device YAML, working ports, speaker and greeting. No ESP32 flash is required.
+Update the add-on to **1.2.1**. Keep Voice PE firmware **2.0.0**, the current device YAML, working ports, speaker and greeting. No ESP32 flash is required.
 
 The backend now uses SpeexDSP adaptive acoustic echo cancellation before forwarding microphone audio to GPT-Live. The reference is the actual paced PCM frame sent into the existing continuous MP3 stream, including silence. Capture is processed in 20 ms blocks at 16 kHz and then resampled to Live's format. Full duplex remains open throughout; no echo-triggered microphone muting or per-reply playback restarts are added.
 
@@ -23,7 +31,7 @@ The backend now uses SpeexDSP adaptive acoustic echo cancellation before forward
    ```
 
 3. Say **Hey Jarvis**. This wake runs a local calibration instead of opening GPT-Live. Three short, soft-edged sweeps play through the normal HTTP/MP3 speaker path; the Voice PE records their return. With the default search range the test lasts roughly eight seconds after speaker startup. No test audio is sent to OpenAI.
-4. Read the add-on log. A usable result looks like `Echo calibration SAVED: delay=... ms, confidence=..., peak_ratio=...`. The delay includes encoding, player buffering, room travel and the microphone capture/return path. The confidence value is a normalised correlation score, not a probability.
+4. Read the add-on log. A usable result looks like `Echo calibration SAVED: delay=... ms, confidence=..., peak_ratio=..., method=...`. The delay includes encoding, player buffering, room travel and the microphone capture/return path. The confidence value is a normalised correlation score for the reported method, not a probability.
 5. Set `aec_calibrate_on_next_wake: false`, save and restart. With `aec_delay_ms: -1`, the saved delay is used automatically. The log confirms `Live AEC active` and its effective delay on the next conversation.
 
 Calibration is one-shot per add-on start: later wakes are normal conversations even while the flag remains true. Turn the flag off before later restarts unless you want to repeat the test. Failed, ambiguous, clipped or interrupted captures do not overwrite the last good measurement. The saved result is scoped to the speaker entity, microphone network address, announcement setting and stream prebuffer. It survives add-on restarts and updates in `/data/echo_calibration.json`; raw audio is kept only in bounded memory and discarded after the test.
@@ -44,7 +52,7 @@ Until a matching calibration is available, automatic mode logs that AEC is await
 | `aec_suppression_active_db` | -8 | Residual suppression while you speak too; move toward 0 if your voice is being reduced. |
 | `aec_log_stats` | false | Log effective delay and before/after microphone RMS every five seconds. These levels may include your voice and are not echo-only quality measurements. |
 | `aec_calibration_max_delay_ms` | 5000 | Measurement search range; increase for a very slow player. |
-| `aec_calibration_min_confidence` | 0.35 | Minimum normalised match; weak or ambiguous results are rejected. |
+| `aec_calibration_min_confidence` | 0.35 | Minimum spectral match for the complete probe and each sweep; weak, inconsistent or ambiguous results are rejected. |
 | `aec_calibration_level` | 0.15 | Test signal peak level; does not change WiiM volume. |
 
 The delay selects an older reference; it does **not** hold microphone audio for that many milliseconds. Small corrections are smoothed to avoid reference jumps. Periodic tones and weak matches during user speech do not move the offset. The native adaptive filter and residual suppression handle the echo; tracking is only for alignment.

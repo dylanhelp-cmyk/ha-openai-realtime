@@ -218,9 +218,9 @@ configuration:
       long after the sweeps. Raise if a high-latency speaker is outside the search range.
   aec_calibration_min_confidence:
     name: Calibration minimum correlation
-    description: Reject weak matches instead of overwriting a previous calibration, default 0.35. Keep
-      quiet and adjust speaker level or position before lowering this threshold. Ambiguous and clipped
-      captures are also rejected.
+    description: Minimum spectral match for the complete probe and each of its three sweeps, default
+      0.35. Keep quiet and use comfortable speaker volume. Waveform correlation alone may be low with
+      independent clocks. Ambiguous, inconsistent and clipped captures are also rejected.
   aec_calibration_level:
     name: Calibration test level
     description: Digital peak level of the soft-edged test sweeps, default 0.15. Does not change the WiiM

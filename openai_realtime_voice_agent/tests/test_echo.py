@@ -38,6 +38,91 @@ def colour(noise):
 
 
 class MeasurementTests(unittest.TestCase):
+    def test_spectral_calibration_survives_clock_skew_that_breaks_waveform_match(self):
+        reference = np.concatenate((np.zeros(16000), probe16(), np.zeros(96000)))
+        positions = np.arange(len(reference))
+        for ppm in (-500, 50, 100, 250, 500, 1000):
+            with self.subTest(ppm=ppm):
+                microphone = (
+                    np.interp(
+                        (positions - 12320) * (1 + ppm / 1e6),
+                        positions,
+                        reference,
+                        left=0,
+                        right=0,
+                    )
+                    * 0.5
+                )
+                microphone += np.random.default_rng(42).normal(0, 35, len(reference))
+                result = measure_delay(records(reference), records(microphone))
+                self.assertAlmostEqual(result["delay_ms"], 770, delta=4)
+                self.assertGreater(result["spectral_confidence"], 0.8)
+                self.assertLessEqual(result["delay_spread_ms"], 4)
+                if ppm == 250:
+                    self.assertLess(result["waveform_confidence"], 0.25)
+                    self.assertEqual(result["method"], "spectral")
+
+    def test_spectral_calibration_handles_dispersive_room_and_gain_changes(self):
+        rng = np.random.default_rng(20)
+        reference = np.concatenate((np.zeros(16000), probe16(), np.zeros(96000)))
+        # A long, dispersive impulse response smears phase across frequencies.
+        kernel = rng.normal(0, 1, 1280) * np.exp(-np.arange(1280) / 300)
+        kernel /= np.linalg.norm(kernel)
+        microphone = np.convolve(reference, kernel)[: len(reference)]
+        microphone = np.concatenate((np.zeros(12320), microphone[:-12320]))
+        # Dynamic microphone AGC, polarity reversal and a quiet room floor.
+        microphone *= -0.4 * np.linspace(0.5, 1.5, len(reference))
+        microphone += rng.normal(0, 20, len(reference))
+        result = measure_delay(records(reference), records(microphone))
+        self.assertAlmostEqual(result["delay_ms"], 770, delta=20)
+        self.assertGreater(result["spectral_confidence"], 0.65)
+
+    def test_frame_timestamp_corrections_do_not_destroy_calibration(self):
+        reference = np.concatenate((np.zeros(16000), probe16(), np.zeros(96000)))
+        microphone = np.concatenate((np.zeros(12320), reference[:-12320])) * 0.5
+        frames = [
+            (stamp + np.sin(index / 10) * 0.001, samples)
+            for index, (stamp, samples) in enumerate(records(microphone))
+        ]
+        result = measure_delay(records(reference), frames)
+        self.assertAlmostEqual(result["delay_ms"], 770, delta=8)
+        self.assertGreater(result["spectral_confidence"], 0.7)
+
+    def test_one_sweep_and_constant_tone_are_not_enough_to_calibrate(self):
+        reference = np.concatenate((probe16(), np.zeros(96000)))
+        one_sweep = np.zeros_like(reference)
+        one_sweep[6400 : 6400 + 8000] = reference[:8000] * 0.5
+        tone = np.sin(np.arange(len(reference)) * 2 * np.pi * 1000 / 16000) * 1000
+        for microphone in (one_sweep, tone):
+            with self.assertRaisesRegex(ValueError, "Unreliable"):
+                measure_delay(records(reference), records(microphone))
+
+    def test_changing_delay_between_sweeps_is_rejected(self):
+        reference = np.concatenate((probe16(), np.zeros(96000)))
+        microphone = np.zeros_like(reference)
+        for index, delay in enumerate((6400, 8000, 9600)):
+            first = index * 11200
+            microphone[first + delay : first + delay + 8000] = (
+                reference[first : first + 8000] * 0.5
+            )
+        with self.assertRaisesRegex(ValueError, r"spread=.*mic_rms=.*mic_peak="):
+            measure_delay(records(reference), records(microphone))
+
+    def test_two_equal_echo_paths_are_ambiguous(self):
+        reference = np.concatenate((probe16(), np.zeros(96000)))
+        microphone = (
+            np.concatenate((np.zeros(6400), reference[:-6400])) * 0.4
+            + np.concatenate((np.zeros(14400), reference[:-14400])) * 0.4
+        )
+        with self.assertRaisesRegex(ValueError, "Unreliable"):
+            measure_delay(records(reference), records(microphone))
+
+    def test_echo_outside_search_range_is_rejected(self):
+        reference = np.concatenate((probe16(), np.zeros(96000)))
+        microphone = np.concatenate((np.zeros(9600), reference[:-9600])) * 0.5
+        with self.assertRaisesRegex(ValueError, "Unreliable"):
+            measure_delay(records(reference), records(microphone), max_delay_ms=200)
+
     def test_known_delay_with_room_reflections_noise_and_different_gain(self):
         rng = np.random.default_rng(42)
         reference = np.concatenate((np.zeros(16000), probe16(), np.zeros(16000 * 6)))

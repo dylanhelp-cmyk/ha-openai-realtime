@@ -126,10 +126,17 @@ class CalibrationSession:
                 return  # Stop/new wake cannot persist a stale measurement.
             self.store.save(self.s, self.device, result)
             log.info(
-                "Echo calibration SAVED: delay=%.2f ms, confidence=%.3f, peak_ratio=%.2f. aec_delay_ms: -1 uses this on the next conversation.",
+                "Echo calibration SAVED: delay=%.2f ms, confidence=%.3f, peak_ratio=%.2f, method=%s, waveform=%.3f, spectral=%.3f, sweep_min=%.3f, spread=%.0f ms, mic_rms=%.0f, mic_peak=%.0f. aec_delay_ms: -1 uses this on the next conversation.",
                 result["delay_ms"],
                 result["confidence"],
                 result["peak_ratio"],
+                result["method"],
+                result["waveform_confidence"],
+                result["spectral_confidence"],
+                result["sweep_min_confidence"],
+                result["delay_spread_ms"],
+                result["mic_rms"],
+                result["mic_peak"],
             )
             if self.s.aec_delay_ms >= 0:
                 log.info(
