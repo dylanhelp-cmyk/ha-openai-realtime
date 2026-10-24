@@ -349,6 +349,36 @@ class AudioTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ConfigTests(unittest.TestCase):
+    def test_container_release_extracts_the_manifest_version(self):
+        import os
+        import subprocess
+        import tempfile
+
+        import yaml
+
+        root = Path(__file__).parents[2]
+        workflow = yaml.safe_load(
+            (root / ".github/workflows/build-addon.yml").read_text()
+        )
+        step = next(
+            s for s in workflow["jobs"]["build"]["steps"] if s.get("id") == "version"
+        )
+        manifest = yaml.safe_load(
+            (root / "openai_realtime_voice_agent/config.yaml").read_text()
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "output"
+            subprocess.run(
+                ["bash", "-e", "-c", step["run"]],
+                check=True,
+                cwd=root,
+                env={**os.environ, "GITHUB_OUTPUT": str(output)},
+                capture_output=True,
+            )
+            self.assertEqual(
+                output.read_text().strip(), f"version={manifest['version']}"
+            )
+
     def test_schema_and_translations_have_no_dead_realtime_fields(self):
         import yaml
 
