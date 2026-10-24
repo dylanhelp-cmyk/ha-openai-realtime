@@ -1,5 +1,5 @@
 name: GPT-Live Voice Agent (Dylan fork)
-version: "1.3.0"
+version: "1.4.0"
 slug: openai_realtime_voice_agent
 description: Greeting-first GPT-Live conversations, Home Assistant control and streaming speaker output.
 url: https://github.com/dylanhelp-cmyk/ha-openai-realtime
@@ -61,11 +61,14 @@ options:
   mcp_tool_allowlist: ''
   mcp_preload_context: true
   tts_output: voice_pe
+  live_transport: websocket
+  render_lead_diagnostic_on_next_wake: false
   airplay_host: ''
   airplay_port: 7000
   airplay_protocol: airplay2
   airplay_volume: 20
   airplay_latency_ms: 600
+  airplay_render_lead_ms: 2000
   airplay_interface: ''
   airplay_encryption: true
   tts_media_player: ''
@@ -123,11 +126,14 @@ schema:
   mcp_tool_allowlist: str
   mcp_preload_context: bool
   tts_output: list(voice_pe|media_player|airplay)
+  live_transport: list(websocket|webrtc)
+  render_lead_diagnostic_on_next_wake: bool
   airplay_host: str
   airplay_port: int(1,65535)
   airplay_protocol: list(airplay2|raop|airplay2-compat)
   airplay_volume: int(0,100)
   airplay_latency_ms: int(200,3000)
+  airplay_render_lead_ms: int(200,3000)
   airplay_interface: str
   airplay_encryption: bool
   tts_media_player: str

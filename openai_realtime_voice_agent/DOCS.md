@@ -1,7 +1,46 @@
-# GPT-Live Voice Agent 1.3.0
+# GPT-Live Voice Agent 1.4.0
 
 Wake → microphone starts immediately → GPT-Live streams the configured greeting → conversation → quiet timeout closes the paid session.
 No wake chime, no manual turn commits, and no always-connected OpenAI session.
+
+## Latency experiments (1.4.0)
+
+Update the add-on only; keep Voice PE firmware 2.0.0 and current device YAML. This release separates three possible latency sources. Defaults keep WebSocket and the existing 2000 ms AirPlay render lead. No automatic paid comparison, device update or lower-lead selection occurs.
+
+### 1. Acoustic render-lead sweep (no OpenAI)
+
+With direct AirPlay already working, merge these settings, save/restart and wake once:
+
+```yaml
+tts_output: airplay
+airplay_host: "192.168.1.124" # use your amp's own current IP
+airplay_render_lead_ms: 2000
+airplay_latency_ms: 600
+live_transport: websocket
+aec_calibrate_on_next_wake: false
+playback_diagnostic_on_next_wake: false
+render_lead_diagnostic_on_next_wake: true
+```
+
+Keep quiet for twelve tones (four three-tone trials), roughly 40–50 seconds plus connection setup. Each trial creates a fresh AirPlay connection with requested render lead **2000, 1000, 500, then 250 ms**. The buffer, volume, protocol, source and microphone stay the same. There is no HTTP/MP3 software reference and no OpenAI connection. The test never saves settings or AEC calibration, including when measurements succeed. Stop/new wake cancels remaining trials. Later wakes are ordinary conversations; turn the flag off before future restarts.
+
+Paste `Render lead trial RESULT` and `Render lead sweep RESULT`. Compare measured speaker-to-microphone round trips, not the requested render lead or connection acknowledgement. The previous successful baseline was 2472 ms with requested render lead 2000 ms and buffer 600 ms. Unavailable results may mean silence, unstable playback or unreliable correlation; they are not zero latency. Listen for stuttering too: a good short probe alone cannot establish long-conversation stability. Keep 2000 ms as the fallback and manually choose a lower value only after reliable measurements/listening. The receiver may impose a minimum regardless of our request.
+
+`airplay_render_lead_ms` accepts 200–3000 ms and is separate from `airplay_latency_ms`, the sender queue-depth request. The small auditable patch to pinned upstream cliairplay exposes an experimental `--render-lead` argument; both architectures build the modified source. At 2000 ms existing AirPlay calibration profile identities are preserved; other leads get distinct profiles. Do not reuse a 2000 ms-lead calibration with a shorter lead. Once the desired route is stable, disable all diagnostic flags, set `aec_calibrate_on_next_wake: true` and `aec_delay_ms: -1`, restart and measure once; then disable calibration again.
+
+### 2. GPT-Live WebRTC versus WebSocket (ordinary paid wakes)
+
+Hold AirPlay render lead, buffer, volume, prompt and microphone position constant. Turn **all** calibration/diagnostic flags off. Start with `live_transport: websocket`, restart and make a few ordinary conversations with the same short request. Then set `live_transport: webrtc`, restart and repeat. Record the startup/first-audio/speaker-handoff logs plus perceived response delay. Compare several runs; one connection is affected by network and service variation. Do not change render lead while comparing transports.
+
+This switches the **add-on ↔ OpenAI** connection. Voice PE ↔ add-on remains its current WebSocket, and add-on ↔ amp remains AirPlay. It does not eliminate speaker buffering or change the voice model/backend tools. WebRTC uses the same `gpt-live-1` through `POST /v1/live/sessions`, negotiated audio tracks and a data channel for control. WebSocket remains the default/fallback chosen explicitly; there is no automatic reconnect to another paid transport after failure. UDP/ICE/firewall compatibility must be tested on your network. This is standard WebRTC, not WARP.
+
+Each ordinary wake creates one paid voice session; the offline speaker test does not. OpenAI documents a 15-second WebRTC initialization charge credited against running-session duration, not an additional 15 seconds on a successful running session. Failed initialization can still incur that charge. Session closure waits a bounded time for the final event; missing confirmation means usage is not final, not zero. No real OpenAI request is made by the automated tests.
+
+Official references: [GPT-Live WebRTC](https://developers.openai.com/api/docs/guides/voice-webrtc), [Live session creation](https://developers.openai.com/api/reference/resources/live/methods/create).
+
+### 3. Startup microphone backlog
+
+At readiness, the bridge removes only a very quiet queued prefix, retaining 40 ms pre-roll and all detected speech. This prevents startup silence from becoming a permanent microphone delay when capture and transmission otherwise run at the same pace. It is a one-time startup operation, not turn segmentation or ongoing microphone gating. It cannot recover audio already dropped by the bounded input buffer, and it does not discard or accelerate retained speech just to catch up. Logs report the trim and remaining queue so this improvement can be distinguished from transport/player changes.
 
 ## Direct AirPlay output (1.3.0)
 

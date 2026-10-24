@@ -2,6 +2,8 @@
 
 A greeting-first GPT-Live voice assistant for Home Assistant Voice PE and network speakers.
 
+Version **1.4.0** adds an offline render-lead sweep, an optional same-model WebRTC transport comparison and conservative startup-silence trimming. See [latency experiments](DOCS.md#latency-experiments-140); no firmware flash required.
+
 Version **1.3.0** adds optional direct AirPlay: one continuous connection per conversation, tunable sender buffering and transport-specific AEC calibration. No Music Assistant or firmware change required. Start with the [local AirPlay playback comparison](DOCS.md#direct-airplay-output-130); physical latency improvement is not guaranteed.
 
 Say Hey Jarvis: the microphone starts immediately, GPT-Live opens with your configurable greeting, and the conversation continues. Home Assistant tools run through a separately configurable Responses backend. The paid voice session closes when the conversation is quiet.

@@ -46,3 +46,19 @@ class InputAudio:
         self.data.clear()
         self.odd = b""
         self.resampler = None
+
+    def trim_startup_silence(self, threshold_db=-65, keep_ms=40):
+        """Remove only a quiet prefix at readiness, keeping speech and pre-roll.
+
+        Called once, not per turn. Never speed up, burst or discard a detected
+        speech frame to catch up. Already-overflowed input cannot be recovered.
+        """
+        quiet = 0
+        for offset in range(0, len(self.data) - FRAME_BYTES + 1, FRAME_BYTES):
+            if dbfs(self.data[offset : offset + FRAME_BYTES]) > threshold_db:
+                break
+            quiet += FRAME_BYTES
+        keep = max(0, keep_ms // 20) * FRAME_BYTES
+        remove = max(0, quiet - keep)
+        del self.data[:remove]
+        return remove / (RATE * 2) * 1000

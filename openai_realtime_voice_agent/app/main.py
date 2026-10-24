@@ -16,6 +16,7 @@ from app.live_audio import AudioHTTPServer
 from app.live_session import LiveSession
 from app.mcp_tools import HomeTools
 from app.playback_diagnostic import PlaybackDiagnosticSession
+from app.render_lead_diagnostic import RenderLeadDiagnosticSession
 from app.settings import Settings
 
 log = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ class VoiceBridge:
         self.calibration_store = CalibrationStore()
         self.calibration_pending = settings.aec_calibrate_on_next_wake
         self.diagnostic_pending = settings.playback_diagnostic_on_next_wake
+        self.render_lead_pending = settings.render_lead_diagnostic_on_next_wake
         self.token = os.environ.get("SUPERVISOR_TOKEN") or settings.longlived_token
 
     async def start(self, app):
@@ -130,7 +132,17 @@ class VoiceBridge:
                                 "ok": True,
                             }
                         )
-                    if self.diagnostic_pending:
+                    if self.render_lead_pending:
+                        self.render_lead_pending = False
+                        session = RenderLeadDiagnosticSession(
+                            self.s,
+                            device,
+                            self.http,
+                            self.server,
+                            self.token,
+                            self.calibration_store,
+                        )
+                    elif self.diagnostic_pending:
                         self.diagnostic_pending = False
                         session = PlaybackDiagnosticSession(
                             self.s,

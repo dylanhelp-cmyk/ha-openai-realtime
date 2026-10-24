@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.0 — Controlled latency experiments
+
+- Expose experimental AirPlay render lead independently from queue depth using a pinned, auditable native source patch. Keep default 2000 ms and preserve its existing calibration identity.
+- Add a no-OpenAI four-stage next-wake acoustic sweep (2000/1000/500/250 ms), constant buffer and no settings/AEC writes. Stop cancels remaining trials; results never auto-select an unstable route.
+- Add explicit same-model GPT-Live WebRTC versus WebSocket selection for controlled ordinary-wake comparisons; preserve WebSocket default and do not silently open fallback paid sessions.
+- Trim only quiet startup microphone pre-roll while retaining speech and 40 ms context; report remaining startup backlog. No per-turn input clearing.
+- Document separate speaker, transport and microphone comparisons; hardware latency, Internet connectivity and model access still require user tests.
+
 ## 1.3.0 — Direct AirPlay output
 
 - Optional direct AirPlay output: one persistent standalone sender and continuous stereo PCM per conversation; no Music Assistant, HA media-player playback service or HTTP/MP3 delivery required.

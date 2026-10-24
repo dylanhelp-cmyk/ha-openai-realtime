@@ -124,29 +124,55 @@ class LiveSession:
             if self.failed or self.closed:
                 return
             async with asyncio.timeout(self.s.session_start_timeout_s):
-                connect_started_at = time.monotonic()
-                self.ws = await self.http.ws_connect(
-                    LIVE_URL,
-                    headers={"Authorization": f"Bearer {self.s.openai_api_key}"},
-                    heartbeat=20,
-                    max_msg_size=4 * 1024 * 1024,
-                )
-                connected_at = time.monotonic()
-                log.info(
-                    "GPT-Live WebSocket connected in %.0f ms (wake=%d, before_connect=%.0f ms, since_wake=%.0f ms; DNS/TCP/TLS/upgrade combined)",
-                    (connected_at - connect_started_at) * 1000,
-                    self.wake_id,
-                    (connect_started_at - self.wake_started_at) * 1000,
-                    (connected_at - self.wake_started_at) * 1000,
-                )
-                if self.failed or self.closed:
-                    return
-                stage = "session_config"
-                config_started_at = time.monotonic()
-                config, greeting = self.session_config()
-                session_start_at = time.monotonic()
-                stage = "session_init"
-                await self.send({"type": "session.start", "session": config})
+                if self.s.live_transport == "webrtc":
+                    from app.webrtc import LiveWebRTC
+
+                    stage = "webrtc_config"
+                    config_started_at = time.monotonic()
+                    config, greeting = self.session_config()
+                    session_start_at = time.monotonic()
+                    self.ws = LiveWebRTC(
+                        self.http,
+                        self.s.openai_api_key,
+                        self.input.frame,
+                        self.receive_output_audio,
+                        self.s.session_close_timeout_s,
+                    )
+                    stage = "webrtc_create"
+                    await self.ws.connect(config)
+                    log.info(
+                        "GPT-Live WebRTC connected in %.0f ms (wake=%d, offer_ice=%.0f ms, http_create=%.0f ms, peer_channel=%.0f ms, since_wake=%.0f ms; transport setup, not audible playback)",
+                        (time.monotonic() - session_start_at) * 1000,
+                        self.wake_id,
+                        self.ws.offer_ms,
+                        self.ws.http_ms,
+                        self.ws.peer_ms,
+                        (time.monotonic() - self.wake_started_at) * 1000,
+                    )
+                else:
+                    connect_started_at = time.monotonic()
+                    self.ws = await self.http.ws_connect(
+                        LIVE_URL,
+                        headers={"Authorization": f"Bearer {self.s.openai_api_key}"},
+                        heartbeat=20,
+                        max_msg_size=4 * 1024 * 1024,
+                    )
+                    connected_at = time.monotonic()
+                    log.info(
+                        "GPT-Live WebSocket connected in %.0f ms (wake=%d, before_connect=%.0f ms, since_wake=%.0f ms; DNS/TCP/TLS/upgrade combined)",
+                        (connected_at - connect_started_at) * 1000,
+                        self.wake_id,
+                        (connect_started_at - self.wake_started_at) * 1000,
+                        (connected_at - self.wake_started_at) * 1000,
+                    )
+                    if self.failed or self.closed:
+                        return
+                    stage = "session_config"
+                    config_started_at = time.monotonic()
+                    config, greeting = self.session_config()
+                    session_start_at = time.monotonic()
+                    stage = "session_init"
+                    await self.send({"type": "session.start", "session": config})
                 first = await self.ws.receive()
                 if first.type != aiohttp.WSMsgType.TEXT:
                     raise RuntimeError("Live startup connection closed")
@@ -155,8 +181,17 @@ class LiveSession:
                     raise RuntimeError(
                         "Live session rejected; check API access, voice and backend model"
                     )
+            trimmed = self.input.trim_startup_silence()
+            log.info(
+                "GPT-Live input startup backlog: transport=%s, trimmed_silence=%.0f ms, retained=%.0f ms (speech preserved)",
+                self.s.live_transport,
+                trimmed,
+                len(self.input.data) / 48,
+            )
             self.ready_at = time.monotonic()
             self.ready.set()
+            if self.s.live_transport == "webrtc":
+                self.ws.ready.set()
             self.last_activity = self.ready_at
             stage = "running"
             log.info(
@@ -167,10 +202,9 @@ class LiveSession:
                 (self.ready_at - session_start_at) * 1000,
                 (self.ready_at - self.wake_started_at) * 1000,
             )
-            self.tasks = [
-                asyncio.create_task(self._input_pump()),
-                asyncio.create_task(self._watchdog()),
-            ]
+            self.tasks = [asyncio.create_task(self._watchdog())]
+            if self.s.live_transport == "websocket":
+                self.tasks.append(asyncio.create_task(self._input_pump()))
             if self.s.opening_greeting:
                 await self.send(
                     {
@@ -210,21 +244,7 @@ class LiveSession:
             audio = base64.b64decode(event.get("delta", ""), validate=True)
             if len(audio) % 2:
                 raise ValueError("Invalid PCM output alignment")
-            if audio:
-                if self.first_audio_at is None:
-                    self.first_audio_at = time.monotonic()
-                    after_ready = (
-                        f"{(self.first_audio_at - self.ready_at) * 1000:.0f}"
-                        if self.ready_at is not None
-                        else "n/a"
-                    )
-                    log.info(
-                        "GPT-Live first audio received in %.0f ms (wake=%d, after_ready=%s ms; received PCM, not speaker playback)",
-                        (self.first_audio_at - self.wake_started_at) * 1000,
-                        self.wake_id,
-                        after_ready,
-                    )
-                await self.output.write(audio)
+            await self.receive_output_audio(audio)
         elif kind in {
             "session.input_transcript.delta",
             "session.output_transcript.delta",
@@ -259,6 +279,24 @@ class LiveSession:
             await self.fail(
                 "GPT-Live rejected a command; see error code in the add-on log"
             )
+
+    async def receive_output_audio(self, audio):
+        if not audio or self.closed:
+            return
+        if self.first_audio_at is None:
+            self.first_audio_at = time.monotonic()
+            after_ready = (
+                f"{(self.first_audio_at - self.ready_at) * 1000:.0f}"
+                if self.ready_at is not None
+                else "n/a"
+            )
+            log.info(
+                "GPT-Live first audio received in %.0f ms (wake=%d, after_ready=%s ms; received PCM, not speaker playback)",
+                (self.first_audio_at - self.wake_started_at) * 1000,
+                self.wake_id,
+                after_ready,
+            )
+        await self.output.write(audio)
 
     async def backend_event(self, event, delegation_id=None):
         kind = event.get("type")
@@ -433,9 +471,17 @@ class LiveSession:
         await self.output.close()
         self.echo.close()
         if self.ws and not self.ws.closed:
-            with suppress(Exception):
-                await self.send({"type": "session.close"})
+            if self.s.live_transport == "websocket":
+                with suppress(Exception):
+                    await self.send({"type": "session.close"})
             await self.ws.close()
+        if self.s.live_transport == "webrtc" and self.ws:
+            final_event = getattr(self.ws, "final_event", None)
+            if final_event:
+                self.usage_seconds = final_event.get("usage", {}).get(
+                    "seconds", self.usage_seconds
+                )
+                self.usage_confirmed = True
         await self.device.end()
         # An in-flight HA mutation is not retried or replayed on the next wake.
         # Let already-issued requests finish, but never send results to a new session.

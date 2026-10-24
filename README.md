@@ -2,6 +2,8 @@
 
 This fork now uses **GPT-Live 1**, with a separate Responses backend for Home Assistant device control and optional web search.
 
+Version **1.4.0** adds a controlled AirPlay render-lead sweep and optional same-model WebRTC transport, plus conservative startup-silence trimming. See [latency experiments](openai_realtime_voice_agent/DOCS.md#latency-experiments-140). No Voice PE flash required.
+
 - Wake starts microphone capture and a new Live session immediately.
 - A configurable live-generated greeting replaces the wake chime.
 - Choose continuous Voice PE PCM, direct AirPlay, or one continuous HTTP MP3 stream per conversation to a Home Assistant media player.

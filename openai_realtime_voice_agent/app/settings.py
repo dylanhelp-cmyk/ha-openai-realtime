@@ -44,11 +44,13 @@ class Settings:
     mcp_tool_allowlist: str = ""
     mcp_preload_context: bool = True
     tts_output: str = "voice_pe"
+    live_transport: str = "websocket"
     airplay_host: str = ""
     airplay_port: int = 7000
     airplay_protocol: str = "airplay2"
     airplay_volume: int = 20
     airplay_latency_ms: int = 600
+    airplay_render_lead_ms: int = 2000
     airplay_interface: str = ""
     airplay_encryption: bool = True
     tts_media_player: str = ""
@@ -78,6 +80,7 @@ class Settings:
     aec_log_stats: bool = False
     aec_calibrate_on_next_wake: bool = False
     playback_diagnostic_on_next_wake: bool = False
+    render_lead_diagnostic_on_next_wake: bool = False
     aec_calibration_max_delay_ms: int = 5000
     aec_calibration_min_confidence: float = 0.35
     aec_calibration_level: float = 0.15
@@ -92,6 +95,8 @@ class Settings:
     def validate(self):
         if not self.openai_api_key:
             raise ValueError("OpenAI API key is required")
+        if self.live_transport not in {"websocket", "webrtc"}:
+            raise ValueError("Invalid live_transport")
         if self.microphone_mode not in {"gated", "full_duplex"}:
             raise ValueError("Invalid microphone_mode")
         if self.tts_output not in {"voice_pe", "media_player", "airplay"}:
@@ -128,6 +133,7 @@ class Settings:
             "airplay_port": (1, 65535),
             "airplay_volume": (0, 100),
             "airplay_latency_ms": (200, 3000),
+            "airplay_render_lead_ms": (200, 3000),
             "websocket_port": (1024, 65535),
             "tts_stream_port": (1024, 65535),
             "tts_stream_prebuffer_ms": (0, 3000),
@@ -166,7 +172,12 @@ class Settings:
                 or not lo <= value <= hi
             ):
                 raise ValueError(f"{key} must be between {lo} and {hi}")
-        for key in ("airplay_port", "airplay_volume", "airplay_latency_ms"):
+        for key in (
+            "airplay_port",
+            "airplay_volume",
+            "airplay_latency_ms",
+            "airplay_render_lead_ms",
+        ):
             if type(getattr(self, key)) is not int:
                 raise ValueError(f"{key} must be a whole number")
         if self.aec_delay_ms < 0 and self.aec_delay_ms != -1:
@@ -183,14 +194,24 @@ class Settings:
             raise ValueError(
                 "Echo calibration/playback diagnostic requires external media_player or airplay output"
             )
-        if self.aec_calibrate_on_next_wake and self.playback_diagnostic_on_next_wake:
-            raise ValueError("Arm either calibration or playback diagnostic, not both")
+        armed = (
+            self.aec_calibrate_on_next_wake,
+            self.playback_diagnostic_on_next_wake,
+            self.render_lead_diagnostic_on_next_wake,
+        )
+        if sum(bool(v) for v in armed) > 1:
+            raise ValueError(
+                "Arm only one calibration or playback/render-lead diagnostic"
+            )
+        if self.render_lead_diagnostic_on_next_wake and self.tts_output != "airplay":
+            raise ValueError("Render lead diagnostic requires direct airplay output")
         for key in (
             "aec_enabled",
             "aec_auto_delay",
             "aec_log_stats",
             "aec_calibrate_on_next_wake",
             "playback_diagnostic_on_next_wake",
+            "render_lead_diagnostic_on_next_wake",
             "airplay_encryption",
         ):
             if type(getattr(self, key)) is not bool:

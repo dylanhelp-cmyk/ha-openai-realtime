@@ -1,4 +1,10 @@
 configuration:
+  live_transport:
+    name: GPT-Live audio transport
+    description: websocket preserves the current transport; webrtc tests the same GPT-Live model over negotiated real-time media. One paid session per wake; no automatic paid comparison. Keep output settings fixed when comparing.
+  render_lead_diagnostic_on_next_wake:
+    name: Test AirPlay render leads on next wake
+    description: Tests 2000, 1000, 500 and 250 ms render lead with the same buffer. Twelve tones, roughly 40 seconds. No OpenAI connection or settings/AEC writes. Exclusive with other tests; turn off before future restarts.
   openai_api_key:
     name: OpenAI API key
     description: Project key with GPT-Live and your chosen Responses backend enabled. Kept in the add-on;
@@ -84,6 +90,9 @@ configuration:
   airplay_interface:
     name: Direct AirPlay local interface IP
     description: Normally empty. On multi-interface HA hosts, optionally bind to a specific local IPv4 address reachable from the amp.
+  airplay_render_lead_ms:
+    name: Direct AirPlay render lead (ms)
+    description: Experimental sender render-lead request, separate from queue depth. Default 2000 preserves the original route. Lower values may be ignored or break playback; use the controlled sweep and recalibrate after settling on a value.
   airplay_encryption:
     name: Direct AirPlay RAOP encryption
     description: Request classic RSA audio payload encryption in raop mode only. Disable if unsupported by the receiver. airplay2 and airplay2-compat use their own authentication paths.

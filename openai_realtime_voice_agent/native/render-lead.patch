@@ -1,0 +1,36 @@
+--- a/src/cliairplay.c
++++ b/src/cliairplay.c
+@@ -75,7 +75,7 @@
+     char *host;
+     int port;
+     int volume;
+-    int lead_ms;            /* anchor->render lead (fixed 2000 ms; no external knob) */
++    int lead_ms;            /* experimental configurable anchor->render lead */
+     int debug_level;
+     char *dacp_id;
+     char *active_remote;
+@@ -2212,5 +2212,6 @@
+         {"volume",       required_argument, 0, 'v'},
+         {"latency",      required_argument, 0, 'l'},
++        {"render-lead",  required_argument, 0, 1016},
+         {"dacp",         required_argument, 0, 'D'},
+         {"activeremote", required_argument, 0, 'R'},
+         {"cmdpipe",      required_argument, 0, 'C'},
+@@ -2274,6 +2275,17 @@
+         case 'p': cfg.port = atoi(optarg); break;
+         case 'v': cfg.volume = atoi(optarg); break;
+         case 'l': cfg.splice_depth_ms = atoi(optarg); break;
++        case 1016: {
++            char *end = NULL;
++            errno = 0;
++            long lead = strtol(optarg, &end, 10);
++            if (errno || end == optarg || *end || lead < 200 || lead > 3000) {
++                fprintf(stderr, "render-lead must be an integer from 200 to 3000 ms\n");
++                return 1;
++            }
++            cfg.lead_ms = (int)lead;
++            break;
++        }
+         case 'D': cfg.dacp_id = optarg; break;
+         case 'R': cfg.active_remote = optarg; break;
+         case 'C': cfg.cmdpipe = optarg; break;

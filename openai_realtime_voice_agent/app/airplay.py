@@ -139,6 +139,8 @@ class AirPlayOutput:
                 str(self.s.airplay_volume),
                 "--latency",
                 str(self.s.airplay_latency_ms),
+                "--render-lead",
+                str(self.s.airplay_render_lead_ms),
                 "--samplerate",
                 str(AIRPLAY_RATE),
                 "--bitdepth",
@@ -198,12 +200,13 @@ class AirPlayOutput:
                 else 0
             )
             log.info(
-                "Direct AirPlay ready in %.0f ms (connect=%.0f ms, start=%.0f ms, scheduled_lead=%.0f ms, requested_buffer=%d ms; sender acknowledgement, not acoustic playback)",
+                "Direct AirPlay ready in %.0f ms (connect=%.0f ms, start=%.0f ms, scheduled_lead=%.0f ms, requested_buffer=%d ms, requested_render_lead=%d ms; sender acknowledgement, not acoustic playback)",
                 (time.monotonic() - began) * 1000,
                 (self.connected_at - began) * 1000,
                 (time.monotonic() - self.connected_at) * 1000,
                 lead,
                 self.s.airplay_latency_ms,
+                self.s.airplay_render_lead_ms,
             )
         except asyncio.CancelledError:
             # Shielded spawn must be collected even when Stop races creation.

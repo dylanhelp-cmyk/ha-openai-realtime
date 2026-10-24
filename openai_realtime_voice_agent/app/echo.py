@@ -366,6 +366,11 @@ class CalibrationStore:
                 "encryption": settings.airplay_encryption,
                 "microphone": getattr(device, "identity", ""),
                 "reference_version": 1,
+                **(
+                    {"render_lead_ms": settings.airplay_render_lead_ms}
+                    if settings.airplay_render_lead_ms != 2000
+                    else {}
+                ),
             }
         # Preserve existing HTTP profile keys so upgrading keeps saved offsets.
         return {
