@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0 — Direct AirPlay output
+
+- Optional direct AirPlay output: one persistent standalone sender and continuous stereo PCM per conversation; no Music Assistant, HA media-player playback service or HTTP/MP3 delivery required.
+- Explicit amp IP/port/protocol, initial volume, native AirPlay 2 requested buffer, local bind interface and classic RAOP encryption controls. Native AirPlay 2 uses single-amp NTP timing; no PTP privilege changes or automatic protocol fallback.
+- Existing next-wake calibration and six-tone playback comparison work with AirPlay. Independent transport-specific AEC profiles preserve existing HTTP calibrations; no fabricated HTTP software-reference result for AirPlay.
+- Structured startup/failure diagnostics, bounded backpressure and Stop/cancellation process/FIFO cleanup. Pinned, hash-verified native binaries and upstream licence/notices for both supported image architectures.
+- Protocol/PCM/lifecycle tests and real-binary local RTSP/RTP smoke coverage. Actual WiiM compatibility and latency remain physical tests; no firmware change is required.
+
 ## 1.2.3 — Controlled playback-path comparison
 
 - Add a one-shot next-wake diagnostic: compare the external speaker's measured return with a software decoder reading the actual HTTP/MP3 stream, then test local Voice PE PCM playback using the same sweeps and microphone.

@@ -69,6 +69,16 @@ class CalibrationSession:
         )
         self.output.on_reference = self.reference
 
+    @property
+    def external(self):
+        return self.s.tts_output in {"media_player", "airplay"}
+
+    @property
+    def target_name(self):
+        if self.s.tts_output == "airplay":
+            return f"direct AirPlay ({self.s.airplay_host}:{self.s.airplay_port})"
+        return self.s.tts_media_player if self.external else "Voice PE local PCM"
+
     def reference(self, frame, stamp):
         self.reference_frames.append(self.history.append(frame, stamp))
         if len(self.reference_frames) > 2250:
@@ -110,17 +120,14 @@ class CalibrationSession:
             log.info(
                 "%s armed: keep quiet; three short tones will play through %s. No audio is sent to OpenAI.",
                 "Echo calibration" if self.save_result else "Playback diagnostic",
-                self.s.tts_media_player if self.output.server else "Voice PE local PCM",
+                self.target_name,
             )
             await self.device.mic(True)  # Calibration always captures through playback.
-            if self.output.server:
+            if self.external:
                 async with asyncio.timeout(self.s.tts_stream_start_timeout_s + 1):
-                    while (
-                        not self.output.encoder
-                        or not self.output.encoder.resource.fetched.is_set()
-                    ):
+                    while not self.output.ready.is_set():
                         await self.pause(0.02)
-            if self.software_loopback:
+            if self.software_loopback and self.output.server:
                 self.loopback = MP3Loopback(
                     self.http, self.output.server, self.output.encoder.resource
                 )
@@ -183,7 +190,7 @@ class CalibrationSession:
             if not self.save_result:
                 log.info(
                     "Playback diagnostic %s MEASURED: delay=%.2f ms, confidence=%.3f, sweep_min=%.3f, spread=%.0f ms; AEC calibration unchanged",
-                    "external speaker" if self.output.server else "Voice PE local PCM",
+                    self.target_name,
                     result["delay_ms"],
                     result["confidence"],
                     result["sweep_min_confidence"],

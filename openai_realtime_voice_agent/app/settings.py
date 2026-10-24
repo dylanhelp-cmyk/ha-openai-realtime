@@ -1,6 +1,7 @@
 """Validated GPT-Live settings. Read Supervisor options without exporting secrets."""
 
 import json
+import ipaddress
 import os
 import re
 from dataclasses import dataclass, fields
@@ -43,6 +44,13 @@ class Settings:
     mcp_tool_allowlist: str = ""
     mcp_preload_context: bool = True
     tts_output: str = "voice_pe"
+    airplay_host: str = ""
+    airplay_port: int = 7000
+    airplay_protocol: str = "airplay2"
+    airplay_volume: int = 20
+    airplay_latency_ms: int = 600
+    airplay_interface: str = ""
+    airplay_encryption: bool = True
     tts_media_player: str = ""
     tts_announce: bool = True
     tts_stream_base_url: str = ""
@@ -86,8 +94,29 @@ class Settings:
             raise ValueError("OpenAI API key is required")
         if self.microphone_mode not in {"gated", "full_duplex"}:
             raise ValueError("Invalid microphone_mode")
-        if self.tts_output not in {"voice_pe", "media_player"}:
+        if self.tts_output not in {"voice_pe", "media_player", "airplay"}:
             raise ValueError("Invalid tts_output")
+        if self.airplay_protocol not in {"airplay2", "raop", "airplay2-compat"}:
+            raise ValueError("Invalid airplay_protocol")
+        for key in ("airplay_host", "airplay_interface"):
+            value = getattr(self, key)
+            if not isinstance(value, str):
+                raise ValueError(f"{key} must be an IPv4 address")
+            if value:
+                try:
+                    address = ipaddress.IPv4Address(value)
+                except ipaddress.AddressValueError:
+                    raise ValueError(f"{key} must be an IPv4 address") from None
+                if (
+                    address.is_unspecified
+                    or address.is_multicast
+                    or address == ipaddress.IPv4Address("255.255.255.255")
+                ):
+                    raise ValueError(f"{key} must be a unicast IPv4 address")
+        if self.tts_output == "airplay" and not self.airplay_host:
+            raise ValueError(
+                "Direct AirPlay requires airplay_host (the amp's IPv4 address)"
+            )
         if self.tts_output == "media_player":
             if not re.fullmatch(r"media_player\.[a-z0-9_]+", self.tts_media_player):
                 raise ValueError("Choose a media_player entity for speech")
@@ -96,6 +125,9 @@ class Settings:
             if self.tts_stream_port == self.websocket_port:
                 raise ValueError("Device and audio ports must differ")
         bounds = {
+            "airplay_port": (1, 65535),
+            "airplay_volume": (0, 100),
+            "airplay_latency_ms": (200, 3000),
             "websocket_port": (1024, 65535),
             "tts_stream_port": (1024, 65535),
             "tts_stream_prebuffer_ms": (0, 3000),
@@ -134,6 +166,9 @@ class Settings:
                 or not lo <= value <= hi
             ):
                 raise ValueError(f"{key} must be between {lo} and {hi}")
+        for key in ("airplay_port", "airplay_volume", "airplay_latency_ms"):
+            if type(getattr(self, key)) is not int:
+                raise ValueError(f"{key} must be a whole number")
         if self.aec_delay_ms < 0 and self.aec_delay_ms != -1:
             raise ValueError(
                 "aec_delay_ms must be -1 for measured delay, or a non-negative delay"
@@ -144,9 +179,9 @@ class Settings:
             )
         if (
             self.aec_calibrate_on_next_wake or self.playback_diagnostic_on_next_wake
-        ) and self.tts_output != "media_player":
+        ) and self.tts_output not in {"media_player", "airplay"}:
             raise ValueError(
-                "Echo calibration/playback diagnostic requires external media_player output"
+                "Echo calibration/playback diagnostic requires external media_player or airplay output"
             )
         if self.aec_calibrate_on_next_wake and self.playback_diagnostic_on_next_wake:
             raise ValueError("Arm either calibration or playback diagnostic, not both")
@@ -156,6 +191,7 @@ class Settings:
             "aec_log_stats",
             "aec_calibrate_on_next_wake",
             "playback_diagnostic_on_next_wake",
+            "airplay_encryption",
         ):
             if type(getattr(self, key)) is not bool:
                 raise ValueError(f"{key} must be true or false")

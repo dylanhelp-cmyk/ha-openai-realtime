@@ -355,6 +355,19 @@ class CalibrationStore:
 
     @staticmethod
     def target(settings, device):
+        if settings.tts_output == "airplay":
+            return {
+                "output": "airplay",
+                "host": settings.airplay_host,
+                "port": settings.airplay_port,
+                "protocol": settings.airplay_protocol,
+                "latency_ms": settings.airplay_latency_ms,
+                "interface": settings.airplay_interface,
+                "encryption": settings.airplay_encryption,
+                "microphone": getattr(device, "identity", ""),
+                "reference_version": 1,
+            }
+        # Preserve existing HTTP profile keys so upgrading keeps saved offsets.
         return {
             "player": settings.tts_media_player,
             "microphone": getattr(device, "identity", ""),
@@ -422,7 +435,7 @@ class EchoProcessor:
         self.last_track = 0
         self.last_stats = 0
         self.clock_resets = 0
-        if settings.aec_enabled and settings.tts_output == "media_player":
+        if settings.aec_enabled and settings.tts_output in {"media_player", "airplay"}:
             delay = settings.aec_delay_ms
             if delay < 0:
                 delay = store.load(settings, device) if store else None

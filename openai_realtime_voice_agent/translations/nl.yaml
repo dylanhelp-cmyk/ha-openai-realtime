@@ -65,7 +65,28 @@ configuration:
   tts_output:
     name: Speech output
     description: voice_pe uses continuous PCM; media_player uses one continuous MP3-over-HTTP stream per
-      conversation, including silence. No per-phrase playback requests or wake chimes.
+      conversation; airplay sends continuous PCM directly to the amp without Music Assistant or HTTP.
+  airplay_host:
+    name: Direct AirPlay amp IP
+    description: The WiiM amp's IPv4 address, not the Home Assistant or Voice PE address. Required only for airplay output.
+  airplay_port:
+    name: Direct AirPlay receiver port
+    description: Receiver RTSP port; default 7000 for AirPlay 2. RAOP often uses 5000; check the device's advertised port.
+  airplay_protocol:
+    name: Direct AirPlay protocol
+    description: Start with airplay2 (native, NTP timing). airplay2-compat and raop are explicit compatibility tests; no silent fallback.
+  airplay_volume:
+    name: Direct AirPlay initial volume
+    description: Initial sender volume 0-100, default 20. Interrupts current playback; this is not an announcement with automatic source restoration.
+  airplay_latency_ms:
+    name: Direct AirPlay requested buffer (ms)
+    description: Native AirPlay 2 sender queue depth, default 600. Receiver constraints may override it. Not an acoustic measurement or AEC offset; RAOP compatibility paths may ignore it. Recalibrate after changes.
+  airplay_interface:
+    name: Direct AirPlay local interface IP
+    description: Normally empty. On multi-interface HA hosts, optionally bind to a specific local IPv4 address reachable from the amp.
+  airplay_encryption:
+    name: Direct AirPlay RAOP encryption
+    description: Request classic RSA audio payload encryption in raop mode only. Disable if unsupported by the receiver. airplay2 and airplay2-compat use their own authentication paths.
   tts_media_player:
     name: Speech media player
     description: Exact entity ID, for example media_player.living_room_speakers. Used only for media_player
@@ -78,7 +99,7 @@ configuration:
   tts_stream_base_url:
     name: Audio HTTP address
     description: Speaker-reachable LAN base URL, for example http://192.168.1.100:18082. Required for
-      external output. Replace the IP with your HA host and keep this port on the LAN.
+      media_player output only. Not used by direct AirPlay. Replace the IP with your HA host and keep this port on the LAN.
   tts_stream_port:
     name: Audio HTTP port
     description: Free port for temporary MP3 streams, default 18082. Must match Audio HTTP address and
@@ -88,8 +109,8 @@ configuration:
     description: MP3 collected once at wake before requesting playback. Default 120. This does not repeat
       between phrases. Reduce for quicker startup; raise for stuttering.
   tts_stream_start_timeout_s:
-    name: Speaker fetch timeout (seconds)
-    description: Maximum wait for the speaker to fetch the conversation stream. A failure timeout, not
+    name: Speaker startup timeout (seconds)
+    description: Maximum wait for HTTP fetch or direct AirPlay connection/start acknowledgement. A failure timeout, not
       an added turn-taking delay.
   tts_start_allowance_ms:
     name: Gated microphone playback allowance (ms)

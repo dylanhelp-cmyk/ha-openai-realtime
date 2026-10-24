@@ -22,7 +22,8 @@ class Device:
                 "type": "hello",
                 "live": True,
                 "protocol": 2,
-                "external_audio": self.settings.tts_output == "media_player",
+                "external_audio": self.settings.tts_output
+                in {"media_player", "airplay"},
                 "playback_prebuffer_ms": self.settings.playback_prebuffer_ms,
             }
         )

@@ -9,6 +9,7 @@ from contextlib import suppress
 import aiohttp
 
 from app.live_audio import LiveMP3
+from app.airplay import AirPlayOutput
 from app.pcm import FRAME_BYTES, RATE, SILENCE, dbfs
 
 log = logging.getLogger(__name__)
@@ -45,6 +46,8 @@ class SpeechOutput:
         self.closed = False
         self.requested = False
         self.encoder = None
+        self.airplay = None
+        self.ready = asyncio.Event()
         self.playback = None
         self.command = None
         self.tail = None
@@ -155,6 +158,7 @@ class SpeechOutput:
             (fetched_at - play_requested_at) * 1000,
             (fetched_at - self.wake_started_at) * 1000,
         )
+        self.ready.set()
         await self.command
         await resource.finished.wait()
         if resource.error:
@@ -173,11 +177,14 @@ class SpeechOutput:
         elif self.speaking:
             self.quiet_ms += 20
             margin = self.s.tts_start_allowance_ms
-            margin += (
-                self.s.tts_stream_prebuffer_ms
-                if self.server
-                else self.s.playback_prebuffer_ms
-            )
+            if self.airplay:
+                margin += self.s.airplay_latency_ms
+            else:
+                margin += (
+                    self.s.tts_stream_prebuffer_ms
+                    if self.server
+                    else self.s.playback_prebuffer_ms
+                )
             if (
                 not self.pending_speech
                 and self.quiet_ms >= self.s.output_silence_ms
@@ -189,7 +196,18 @@ class SpeechOutput:
 
     async def _run(self):
         try:
-            if self.server:
+            if self.s.tts_output == "airplay":
+                self.airplay = AirPlayOutput(self.s)
+                await self.airplay.start()
+                if self.closed:
+                    return
+                self.ready.set()
+                log.info(
+                    "Conversation AirPlay sender ready in %.0f ms (wake=%d; sender acknowledgement, not audible playback)",
+                    (time.monotonic() - self.wake_started_at) * 1000,
+                    self.wake_id,
+                )
+            elif self.server:
                 self.encoder = LiveMP3(
                     self.server, RATE, 1, self.s.tts_stream_prebuffer_ms
                 )
@@ -197,8 +215,12 @@ class SpeechOutput:
                 if self.closed:
                     return
                 self.playback = asyncio.create_task(self._external())
+            else:
+                self.ready.set()
             deadline = time.monotonic()
             while not self.closed:
+                if self.airplay:
+                    self.airplay.check()
                 if self.playback and self.playback.done():
                     self.playback.result()
                     raise RuntimeError("Conversation speaker stream ended early")
@@ -225,7 +247,9 @@ class SpeechOutput:
                 await self._activity(loud)
                 if self.on_reference:
                     self.on_reference(frame, time.monotonic())
-                if self.encoder:
+                if self.airplay:
+                    await self.airplay.write(frame)
+                elif self.encoder:
                     await self.encoder.write(frame)
                 else:
                     await self.device.audio(frame)
@@ -234,7 +258,11 @@ class SpeechOutput:
                     sent_at = time.monotonic()
                     log.info(
                         "Conversation first speech handed to %s in %.0f ms (wake=%d, output_queue=%.0f ms; handoff, not audible playback)",
-                        "MP3 encoder" if self.encoder else "Voice PE",
+                        "AirPlay sender"
+                        if self.airplay
+                        else "MP3 encoder"
+                        if self.encoder
+                        else "Voice PE",
                         (sent_at - self.wake_started_at) * 1000,
                         self.wake_id,
                         (sent_at - self.first_speech_queued_at) * 1000,
@@ -246,9 +274,20 @@ class SpeechOutput:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            log.error("Conversation audio failed (%s)", type(exc).__name__)
+            if self.s.tts_output == "airplay":
+                log.error(
+                    "Direct AirPlay failed (%s): %s",
+                    type(exc).__name__,
+                    self.airplay.error
+                    if self.airplay and self.airplay.error
+                    else "check amp IP, AirPlay port/protocol, access restrictions and LAN connectivity",
+                )
+            else:
+                log.error("Conversation audio failed (%s)", type(exc).__name__)
             await self.on_error(
-                "Speaker stream failed; check URL, buffering and access"
+                "Direct AirPlay failed; see add-on log"
+                if self.s.tts_output == "airplay"
+                else "Speaker stream failed; check URL, buffering and access"
             )
 
     async def close(self):
@@ -262,6 +301,8 @@ class SpeechOutput:
             *(t for t in (self.worker, self.playback, self.command, self.tail) if t),
             return_exceptions=True,
         )
+        if self.airplay:
+            await self.airplay.close()
         # Stop before closing the URL, never after an announcement could have
         # completed and restored another source.
         if self.requested:

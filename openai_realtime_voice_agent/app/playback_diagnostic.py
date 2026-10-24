@@ -1,4 +1,4 @@
-"""One wake compares the external MP3 path, software loopback and local PCM."""
+"""One wake compares the selected external transport and local PCM."""
 
 import asyncio
 import logging
@@ -14,7 +14,9 @@ class PlaybackDiagnosticSession:
         self.s, self.device = settings, device
         self.http, self.server, self.token, self.store = http, server, token, store
         self.closed = False
-        self.current = self._trial(settings, server, software_loopback=True)
+        self.current = self._trial(
+            settings, server, software_loopback=settings.tts_output == "media_player"
+        )
 
     def _trial(self, settings, server, software_loopback=False):
         return CalibrationSession(
@@ -36,7 +38,10 @@ class PlaybackDiagnosticSession:
     async def run(self):
         try:
             log.info(
-                "Playback comparison START: external speaker plus software HTTP/MP3 reference, then Voice PE local speaker. Keep quiet; six tones total. No OpenAI connection or AEC calibration writes."
+                "Playback comparison START: %s, then Voice PE local speaker. Keep quiet; six tones total. No OpenAI connection or AEC calibration writes.",
+                "direct AirPlay (no HTTP/MP3 software reference)"
+                if self.s.tts_output == "airplay"
+                else "external speaker plus software HTTP/MP3 reference",
             )
             await self.current.run()
             external, software = self.current.result, self.current.loopback_result
@@ -61,11 +66,12 @@ class PlaybackDiagnosticSession:
                 else "unavailable"
             )
             log.info(
-                "Playback comparison RESULT: external_roundtrip_ms=%s, software_http_mp3_ms=%s, voice_pe_roundtrip_ms=%s, external_minus_software_ms=%s; remainder includes LAN/player/acoustics/microphone return, not pure WiiM buffering. Saved AEC calibration unchanged.",
+                "Playback comparison RESULT: external_roundtrip_ms=%s, software_http_mp3_ms=%s, voice_pe_roundtrip_ms=%s, external_minus_software_ms=%s; output=%s; remainder includes LAN/player/acoustics/microphone return, not pure WiiM buffering. Saved AEC calibration unchanged.",
                 value(external),
                 value(software),
                 value(local),
                 remainder,
+                self.s.tts_output,
             )
             if not local:
                 log.info(

@@ -1,7 +1,67 @@
-# GPT-Live Voice Agent 1.2.3
+# GPT-Live Voice Agent 1.3.0
 
 Wake → microphone starts immediately → GPT-Live streams the configured greeting → conversation → quiet timeout closes the paid session.
 No wake chime, no manual turn commits, and no always-connected OpenAI session.
+
+## Direct AirPlay output (1.3.0)
+
+Update **the add-on only** to 1.3.0. Keep Voice PE firmware **2.0.0**, your current ESPHome YAML, device WebSocket port and Hey Jarvis override. Music Assistant, a Home Assistant media-player entity and an HTTP audio URL are **not required** for this output mode. Existing `voice_pe` and `media_player` modes and saved HTTP calibrations remain available; upgrading does not switch your output automatically.
+
+Merge the following into your existing add-on configuration. Replace the placeholder with **the WiiM amp's own IPv4 address** (not Home Assistant's `192.168.1.56` or the Voice PE's address):
+
+```yaml
+tts_output: airplay
+airplay_host: "REPLACE_WITH_WIIM_IP"
+airplay_port: 7000
+airplay_protocol: airplay2
+airplay_volume: 20
+airplay_latency_ms: 600
+airplay_interface: ""
+airplay_encryption: true
+microphone_mode: full_duplex
+aec_delay_ms: -1
+aec_calibrate_on_next_wake: false
+playback_diagnostic_on_next_wake: true
+```
+
+Save/restart, say Hey Jarvis and keep quiet for the six-tone comparison. This first wake sends no audio to OpenAI. Compare the new `external_roundtrip_ms` with your earlier HTTP result (for example 3004 ms), **not** the connection acknowledgement or `requested_buffer`. The AirPlay trial has no HTTP/MP3 encoder or software reference; its `software_http_mp3_ms` and `external_minus_software_ms` are therefore `unavailable`, by design. The local Voice PE trial still follows. No diagnostic result overwrites AEC calibration.
+
+If playback is reliable, switch to normal calibration:
+
+```yaml
+playback_diagnostic_on_next_wake: false
+aec_calibrate_on_next_wake: true
+aec_delay_ms: -1
+```
+
+Restart and wake once. After `Echo calibration SAVED`, set `aec_calibrate_on_next_wake: false` before later restarts. Later wakes in the same add-on run are already normal conversations. AirPlay profiles are separate from HTTP profiles and include amp IP/port, protocol, requested buffer, bind interface, encryption setting and microphone identity. **Do not reuse the old 3020 ms HTTP offset for AirPlay.** Changing those transport settings requires a matching new calibration; automatic AEC passes through until one is measured. A manual non-negative `aec_delay_ms` still overrides calibration, so change it back to `-1` when measuring a new route.
+
+### What the direct mode does
+
+- Runs one pinned standalone `cliairplay` sender per conversation and resamples the paced 24 kHz mono PCM to 44.1 kHz stereo PCM. The sender applies AirPlay's transport encoding; there is no intermediate MP3/HTTP stream or Music Assistant server.
+- Connects at wake in parallel with GPT-Live setup, primes one silence frame after connection, waits for an explicit start acknowledgement and then sends continuous speech/silence on the **same connection and stdin** until Stop/idle/close. It never reloads a URL or reconnects between phrases.
+- The ordinary bounded speech queue holds generated audio during sender startup. The two-second pipe-drain limit detects a stalled sender; sender exit, native error or startup timeout fails the conversation instead of silently retrying, switching protocols or sending to the local speaker.
+- Native `airplay2` uses transient pairing and NTP timing for this single-amp mode. It does not start a PTP grandmaster, bind privileged PTP ports or require changing add-on protection permissions. No PIN/password pairing workflow or stored receiver credentials is included in this release; access-restricted receivers may reject the connection.
+- Interrupts the amp's current source and applies `airplay_volume` at connection. It is **not** announcement mixing and does not promise to restore Spotify Connect, prior music, source or volume afterward. `tts_media_player`, `tts_announce`, `tts_stream_base_url`, HTTP prebuffer/buffer settings and the Voice PE local jitter buffer are not used for AirPlay delivery. They are retained for switching back.
+
+### Buffer and compatibility controls
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `airplay_host` | empty | Required amp IPv4 address; reserve it in DHCP. |
+| `airplay_port` | 7000 | Receiver's RTSP port, not the add-on's HTTP/device port. Use the port advertised by the amp. |
+| `airplay_protocol` | `airplay2` | Native AirPlay 2 with NTP timing. Explicit alternatives: `airplay2-compat` and `raop`. No automatic fallback. |
+| `airplay_volume` | 20 | Initial AirPlay sender volume, 0–100. Start comfortably low. Its scale need not match the HA integration's volume scale. |
+| `airplay_latency_ms` | 600 | Requested native AirPlay 2 queue depth, 200–3000 ms. It is **not** an acoustic delay or AEC offset; the receiver can impose a different effective delay. RAOP/compatibility routes may ignore it. |
+| `airplay_interface` | empty | Optional IPv4 address of the HA host's outgoing LAN interface; useful on multi-homed hosts. Not the amp's address. |
+| `airplay_encryption` | true | Requests classic RAOP RSA audio-payload encryption in `raop` mode only; turn off for receivers that do not support it. Native AirPlay 2 has its own encryption; `airplay2-compat` uses its own authentication path. |
+| `tts_stream_start_timeout_s` | 10 | Reused as the AirPlay connection/audio-prime/start-ack timeout. Failure threshold, not an added playback delay. |
+
+If the sender connects but the amp stays silent or stutters, try a larger requested buffer (1000, 1500, then 2500 ms) and rerun the diagnostic; some receivers cannot render with a shallow queue. Lower it only once playback is reliable. A smaller requested number cannot force a receiver below its hardware/firmware floor. If native AirPlay 2 cannot connect, verify IP, advertised port and AirPlay access settings first, then test `airplay2-compat` on its advertised port or `raop` (often port 5000). These are explicit compatibility tests, not proven faster routes. Stop other AirPlay senders while testing. No add-on update changes the WiiM's firmware or Music Assistant settings.
+
+Logs include allowlisted sender route/latency/clock fields, coded sender failures, `Direct AirPlay ready` connect/start timings, `Conversation AirPlay sender ready` since-wake timing and first speech handed to the sender. **Acknowledgements and PCM handoff do not prove audible playback.** Use the microphone probe to measure it. Native free-form debug output is not copied into add-on logs. Protocol/PCM/cleanup tests and a real-binary loopback RTSP/RTP test do not replace a physical WiiM listening test; latency improvement is not guaranteed.
+
+Implementation and redistribution details: [standalone sender v0.5.9](https://github.com/music-assistant/airplay-cli/tree/v0.5.9), [WiiM AirPlay support](https://faq.wiimhome.com/en/support/solutions/articles/72000524939-is-airplay-supported-), and [third-party notice](AIRPLAY-NOTICES.md).
 
 ## Compare playback paths (1.2.3)
 
@@ -83,7 +143,7 @@ The backend now uses SpeexDSP adaptive acoustic echo cancellation before forward
 
 Calibration is one-shot per add-on start: later wakes are normal conversations even while the flag remains true. Turn the flag off before later restarts unless you want to repeat the test. Failed, ambiguous, clipped or interrupted captures do not overwrite the last good measurement. The saved result is scoped to the speaker entity, microphone network address, announcement setting and stream prebuffer. It survives add-on restarts and updates in `/data/echo_calibration.json`; raw audio is kept only in bounded memory and discarded after the test.
 
-Until a matching calibration is available, automatic mode logs that AEC is awaiting calibration and passes microphone audio through unchanged. A manual non-negative `aec_delay_ms` also enables processing. AEC is applied to `media_player` output only; local Voice PE output keeps its existing hardware processing.
+Until a matching calibration is available, automatic mode logs that AEC is awaiting calibration and passes microphone audio through unchanged. A manual non-negative `aec_delay_ms` also enables processing. AEC is applied to external `media_player` and direct `airplay` output; local Voice PE output keeps its existing hardware processing.
 
 ### Tune the cancellation
 
