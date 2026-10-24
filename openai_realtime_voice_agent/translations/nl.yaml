@@ -64,17 +64,17 @@ configuration:
       tools, with no catalogue request before every command.
   tts_output:
     name: Speech output
-    description: voice_pe plays through the device; media_player streams live MP3 to your selected network
-      speaker. Wake chimes are removed in both modes.
+    description: voice_pe uses continuous PCM; media_player uses one continuous MP3-over-HTTP stream per
+      conversation, including silence. No per-phrase playback requests or wake chimes.
   tts_media_player:
     name: Speech media player
     description: Exact entity ID, for example media_player.living_room_speakers. Used only for media_player
       output.
   tts_announce:
-    name: Request announcements
-    description: Ask the player integration to restore supported music sources. Spotify Connect cannot
-      auto-resume through the current WiiM integration. Previous assistant audio is never intentionally
-      restored as music.
+    name: Request conversation announcement
+    description: Request announcement mode once for the whole conversation. Music stays interrupted through
+      quiet gaps. Source restoration depends on the player integration; Spotify Connect auto-resume remains
+      unsupported.
   tts_stream_base_url:
     name: Audio HTTP address
     description: Speaker-reachable LAN base URL, for example http://192.168.1.100:18082. Required for
@@ -84,43 +84,38 @@ configuration:
     description: Free port for temporary MP3 streams, default 18082. Must match Audio HTTP address and
       differ from the Voice PE device port.
   tts_stream_prebuffer_ms:
-    name: Speaker stream prebuffer (ms)
-    description: MP3 collected before requesting playback. Default 120. Reduce for quicker startup; raise
-      if it stutters.
+    name: Initial speaker stream prebuffer (ms)
+    description: MP3 collected once at wake before requesting playback. Default 120. This does not repeat
+      between phrases. Reduce for quicker startup; raise for stuttering.
   tts_stream_start_timeout_s:
     name: Speaker fetch timeout (seconds)
-    description: Maximum wait for the speaker to fetch its URL. A failure timeout, not a delay added to
-      successful playback.
+    description: Maximum wait for the speaker to fetch the conversation stream. A failure timeout, not
+      an added turn-taking delay.
   tts_start_allowance_ms:
-    name: Playback startup/tail allowance (ms)
-    description: Margin beyond audio duration before treating playback as finished. Default 300. Raise
-      if the mic opens before the last sound ends; lower if it opens late. Local and external output both
-      use this.
+    name: Gated microphone playback allowance (ms)
+    description: Estimate of speaker buffering beyond the generated audio clock. Used only to time gated
+      microphone reopening; full_duplex input never waits for this.
   playback_prebuffer_ms:
     name: Voice PE jitter buffer (ms)
     description: Device-local PCM cushion. Default 100; affects Voice PE output only. New firmware reads
       this on reconnect.
   microphone_mode:
     name: Microphone mode
-    description: gated closes mic during audible playback to avoid speaker echo. full_duplex keeps it
-      open for Live interruptions; experimental with external speakers because there is no shared echo-cancellation
+    description: full_duplex keeps the mic open throughout the conversation, including speech and pauses.
+      gated optionally closes it during audible output. External speakers have no shared echo-cancellation
       reference.
   mic_reopen_delay_ms:
-    name: Microphone echo guard (ms)
-    description: Additional quiet margin after actual playback before reopening a gated mic. No wake delay
-      or chime is added. Default 150.
+    name: Gated microphone echo guard (ms)
+    description: Extra echo decay before reopening a gated mic. Ignored in full_duplex mode; no input
+      audio is cleared between replies in that mode.
   output_silence_ms:
-    name: Speech segment silence (ms)
-    description: Continuous quiet audio that closes a speech segment. GPT-Live has no response-audio-done
-      event. Default 350; raise if short pauses split speech too much.
-  output_gap_timeout_ms:
-    name: Output packet gap (ms)
-    description: Fallback segment boundary if Live stops sending packets. Default 600. Raise for unstable
-      connections; lower only after testing.
+    name: Speech activity quiet period (ms)
+    description: Quiet audio before LEDs return to listening and a gated mic may reopen. Default 350.
+      This never closes or restarts the conversation stream.
   output_silence_threshold_db:
-    name: Output silence threshold (dBFS)
-    description: Audio quieter than this counts as silence. Default -55. More negative retains quieter
-      speech but can treat background noise as speech.
+    name: Speech activity threshold (dBFS)
+    description: Audio quieter than this counts as silence for LEDs, gated input and idle detection. Default
+      -55. It does not cut speech or split the HTTP stream.
   input_activity_threshold_db:
     name: Input activity threshold (dBFS)
     description: Microphone level that refreshes the conversation idle timer. Default -42. Raise for a
@@ -153,11 +148,16 @@ configuration:
     name: Home Assistant tool timeout (seconds)
     description: Limit for MCP discovery and each call. A failed action may have an unknown outcome; it
       is never blindly retried.
-  audio_retention_seconds:
-    name: Temporary audio retention (seconds)
-    description: Expiry for generated speaker resources. No public file listing or HA credentials in audio
-      URLs.
   log_transcripts:
     name: Log conversation transcripts
     description: Off by default. Enable only when needed for troubleshooting; user and assistant text
       will appear in add-on logs.
+  tts_stream_buffer_seconds:
+    name: HTTP stream memory window (seconds)
+    description: Bounded rolling MP3 buffer for network readers, default 5 seconds. This is a capacity,
+      not an intentional playback delay. Reconnects join the live edge instead of replaying prior replies.
+  output_buffer_ms:
+    name: Output queue limit (ms)
+    description: Maximum queued Live PCM during startup or network bursts, default 3000. Does not wait
+      to fill. Exceeding the spoken-audio limit fails the session instead of accumulating stale delayed
+      speech.

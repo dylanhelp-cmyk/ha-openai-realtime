@@ -4,8 +4,8 @@ This fork now uses **GPT-Live 1**, with a separate Responses backend for Home As
 
 - Wake starts microphone capture and a new Live session immediately.
 - A configurable live-generated greeting replaces the wake chime.
-- Choose Voice PE output or progressive MP3 to a Home Assistant media player.
-- Tune startup buffers, speech segmentation, microphone echo delay and idle timeout.
+- Choose continuous Voice PE PCM or one continuous HTTP MP3 stream per conversation to a Home Assistant media player.
+- Keep full-duplex capture through replies; tune startup buffers, optional microphone gating and idle timeout.
 - OpenAI stays disconnected between conversations; existing Assist permissions are preserved.
 
 Install this repository through the Home Assistant app/add-on store. Existing installations retain the `openai_realtime_voice_agent` slug and their working device port.

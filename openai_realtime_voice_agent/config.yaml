@@ -1,5 +1,5 @@
 name: GPT-Live Voice Agent (Dylan fork)
-version: "1.0.0"
+version: 1.1.0
 slug: openai_realtime_voice_agent
 description: Greeting-first GPT-Live conversations, Home Assistant control and streaming speaker output.
 url: https://github.com/dylanhelp-cmyk/ha-openai-realtime
@@ -69,10 +69,9 @@ options:
   tts_stream_start_timeout_s: 10
   tts_start_allowance_ms: 300
   playback_prebuffer_ms: 100
-  microphone_mode: gated
+  microphone_mode: full_duplex
   mic_reopen_delay_ms: 150
   output_silence_ms: 350
-  output_gap_timeout_ms: 600
   output_silence_threshold_db: -55
   input_activity_threshold_db: -42
   input_buffer_ms: 600
@@ -82,8 +81,9 @@ options:
   session_close_timeout_s: 2
   greeting_timeout_s: 8
   tool_timeout_s: 15
-  audio_retention_seconds: 60
   log_transcripts: false
+  tts_stream_buffer_seconds: 5
+  output_buffer_ms: 3000
 schema:
   openai_api_key: password
   instructions: str
@@ -113,7 +113,6 @@ schema:
   microphone_mode: list(gated|full_duplex)
   mic_reopen_delay_ms: int(0,5000)
   output_silence_ms: int(100,3000)
-  output_gap_timeout_ms: int(100,5000)
   output_silence_threshold_db: float(-90,-10)
   input_activity_threshold_db: float(-90,-10)
   input_buffer_ms: int(100,3000)
@@ -123,5 +122,6 @@ schema:
   session_close_timeout_s: float(1,15)
   greeting_timeout_s: float(1,30)
   tool_timeout_s: float(1,120)
-  audio_retention_seconds: float(5,300)
   log_transcripts: bool
+  tts_stream_buffer_seconds: float(4,30)
+  output_buffer_ms: int(100,10000)

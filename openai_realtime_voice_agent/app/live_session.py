@@ -2,13 +2,14 @@
 
 import asyncio
 import base64
-from contextlib import suppress
 import json
 import logging
 import time
+from contextlib import suppress
 from uuid import uuid4
 
 import aiohttp
+
 from app.output import SpeechOutput
 from app.pcm import InputAudio, dbfs
 
@@ -24,6 +25,7 @@ class LiveSession:
         self.ws = None
         self.ready = asyncio.Event()
         self.closed = False
+        self.failed = False
         self.started = time.monotonic()
         self.last_activity = self.started
         self.last_user_voice = self.started
@@ -98,6 +100,8 @@ class LiveSession:
 
     async def run(self):
         try:
+            if self.failed or self.closed:
+                return
             async with asyncio.timeout(self.s.session_start_timeout_s):
                 self.ws = await self.http.ws_connect(
                     LIVE_URL,
@@ -105,6 +109,8 @@ class LiveSession:
                     heartbeat=20,
                     max_msg_size=4 * 1024 * 1024,
                 )
+                if self.failed or self.closed:
+                    return
                 config, greeting = self.session_config()
                 await self.send({"type": "session.start", "session": config})
                 first = await self.ws.receive()
@@ -300,17 +306,20 @@ class LiveSession:
             self.input.clear()
 
     async def listening(self):
-        await asyncio.sleep(self.s.mic_reopen_delay_ms / 1000)
+        if self.s.microphone_mode == "gated":
+            await asyncio.sleep(self.s.mic_reopen_delay_ms / 1000)
         if self.closed or self.output.active:
             return
         self.last_activity = time.monotonic()
-        self.input.clear()
-        await self.device.mic(True)
+        if self.s.microphone_mode == "gated":
+            self.input.clear()
+            await self.device.mic(True)
         await self.device.set_phase("listening")
 
     async def fail(self, message):
-        if self.closed:
+        if self.closed or self.failed:
             return
+        self.failed = True
         await self.device.send({"type": "error", "message": message})
         if self.ws:
             await self.ws.close()
@@ -319,7 +328,6 @@ class LiveSession:
         warned = False
         while not self.closed:
             await asyncio.sleep(0.05)
-            await self.output.tick()
             now = time.monotonic()
             if (
                 not self.first_output

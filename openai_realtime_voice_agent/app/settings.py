@@ -1,10 +1,10 @@
 """Validated GPT-Live settings. Read Supervisor options without exporting secrets."""
 
-from dataclasses import dataclass, fields
 import json
 import os
-from pathlib import Path
 import re
+from dataclasses import dataclass, fields
+from pathlib import Path
 
 VOICE_PROMPT = """You are Jarvis, a friendly Home Assistant voice assistant. Speak English naturally and keep answers brief.
 Backchannel policy: Use minimal backchannels. Do not talk over the user.
@@ -48,13 +48,14 @@ class Settings:
     tts_stream_base_url: str = ""
     tts_stream_port: int = 18082
     tts_stream_prebuffer_ms: int = 120
+    tts_stream_buffer_seconds: float = 5
     tts_stream_start_timeout_s: float = 10
     tts_start_allowance_ms: int = 300
     playback_prebuffer_ms: int = 100
-    microphone_mode: str = "gated"
+    microphone_mode: str = "full_duplex"
     mic_reopen_delay_ms: int = 150
     output_silence_ms: int = 350
-    output_gap_timeout_ms: int = 600
+    output_buffer_ms: int = 3000
     output_silence_threshold_db: float = -55
     input_activity_threshold_db: float = -42
     input_buffer_ms: int = 600
@@ -64,7 +65,6 @@ class Settings:
     session_close_timeout_s: float = 2
     greeting_timeout_s: float = 8
     tool_timeout_s: float = 15
-    audio_retention_seconds: float = 60
     log_transcripts: bool = False
 
     def validate(self):
@@ -85,12 +85,13 @@ class Settings:
             "websocket_port": (1024, 65535),
             "tts_stream_port": (1024, 65535),
             "tts_stream_prebuffer_ms": (0, 3000),
+            "tts_stream_buffer_seconds": (4, 30),
             "tts_stream_start_timeout_s": (1, 30),
             "tts_start_allowance_ms": (0, 5000),
             "playback_prebuffer_ms": (0, 2000),
             "mic_reopen_delay_ms": (0, 5000),
             "output_silence_ms": (100, 3000),
-            "output_gap_timeout_ms": (100, 5000),
+            "output_buffer_ms": (100, 10000),
             "output_silence_threshold_db": (-90, -10),
             "input_activity_threshold_db": (-90, -10),
             "input_buffer_ms": (100, 3000),
@@ -100,7 +101,6 @@ class Settings:
             "session_close_timeout_s": (1, 15),
             "greeting_timeout_s": (1, 30),
             "tool_timeout_s": (1, 120),
-            "audio_retention_seconds": (5, 300),
             "backend_max_output_tokens": (16, 8192),
         }
         for key, (lo, hi) in bounds.items():

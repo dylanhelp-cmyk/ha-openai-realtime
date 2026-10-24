@@ -40,10 +40,10 @@ class LiveTests(unittest.IsolatedAsyncioTestCase):
         self.s = Settings(
             openai_api_key="fake",
             opening_greeting="Yes, Dylan?",
+            microphone_mode="gated",
             tts_start_allowance_ms=0,
             mic_reopen_delay_ms=0,
             output_silence_ms=100,
-            output_gap_timeout_ms=100,
         )
         self.http = aiohttp.ClientSession()
         self.socket = Socket()
@@ -75,15 +75,16 @@ class LiveTests(unittest.IsolatedAsyncioTestCase):
         self.s.opening_greeting = ""
         self.assertNotIn("input", self.live.session_config()[0])
 
-    async def test_silence_never_starts_speaker_or_gates_microphone(self):
+    async def test_keepalive_silence_does_not_count_as_speech_or_gate_microphone(self):
         await self.live.output.write(SILENCE * 20)
         await asyncio.sleep(0.01)
         self.assertFalse(self.live.output.active)
         self.assertTrue(self.device.mic_enabled)
-        self.assertFalse(self.socket.audio)
+        self.assertTrue(all(frame == SILENCE for frame in self.socket.audio))
 
     async def test_gated_mic_waits_for_real_playback(self):
         await self.live.output.write(TONE * 5)
+        await until(lambda: not self.device.mic_enabled)
         self.assertFalse(self.device.mic_enabled)
         await self.live.output.write(SILENCE * 5)
         await until(lambda: not self.live.output.active and self.device.mic_enabled)
@@ -93,6 +94,17 @@ class LiveTests(unittest.IsolatedAsyncioTestCase):
     async def test_full_duplex_keeps_microphone_open(self):
         self.s.microphone_mode = "full_duplex"
         await self.live.output.write(TONE)
+        await until(lambda: self.live.output.speaking)
+        self.assertTrue(self.device.mic_enabled)
+
+    async def test_full_duplex_listening_never_delays_or_discards_user_audio(self):
+        self.s.microphone_mode = "full_duplex"
+        self.s.mic_reopen_delay_ms = 5000
+        self.live.receive_audio(TONE)
+        captured = bytes(self.live.input.data)
+        self.assertTrue(captured)
+        await asyncio.wait_for(self.live.listening(), 0.1)
+        self.assertEqual(bytes(self.live.input.data), captured)
         self.assertTrue(self.device.mic_enabled)
 
     async def test_stop_during_audio_never_reopens_microphone(self):
@@ -109,12 +121,12 @@ class LiveTests(unittest.IsolatedAsyncioTestCase):
             )
         )
 
-    async def test_packet_gap_closes_segment_without_response_done(self):
+    async def test_packet_gap_only_ends_speech_activity_not_the_transport(self):
         await self.live.output.write(TONE)
-        self.live.output.last_packet -= 1
-        await self.live.output.tick()
-        self.assertIsNone(self.live.output.current)
+        await until(lambda: self.live.output.speaking)
         await until(lambda: not self.live.output.active)
+        self.assertFalse(self.live.output.worker.done())
+        self.assertTrue(self.device.mic_enabled)
 
     async def test_all_unique_tool_results_precede_continuation(self):
         self.live.send = AsyncMock()
@@ -230,6 +242,16 @@ class LiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.live.output.closed)
         self.assertFalse(self.device.mic_enabled)
 
+    async def test_speaker_failure_before_live_connect_does_not_start_a_paid_session(
+        self,
+    ):
+        self.http.ws_connect = AsyncMock()
+        await self.live.fail("Speaker startup failed")
+        await self.live.run()
+        self.http.ws_connect.assert_not_awaited()
+        self.assertTrue(self.live.closed)
+        self.assertFalse(self.device.mic_enabled)
+
     async def test_hard_duration_limit_applies_even_with_stuck_backend(self):
         self.s.max_session_seconds = 0.01
         self.live.responses["stuck"] = []
@@ -291,10 +313,10 @@ class AudioTests(unittest.IsolatedAsyncioTestCase):
         try:
             await out.write(TONE * 50)
             await asyncio.wait_for(fetched.wait(), 3)
-            self.assertIsNotNone(out.current)
-            self.assertFalse(out.current.resource.finished.is_set())
+            self.assertFalse(out.encoder.resource.finished.is_set())
             await out.write(SILENCE * 5)
-            await asyncio.wait_for(out.pending.join(), 3)
+            await until(lambda: not out.active)
+            await out.close()
             await asyncio.gather(*downloads)
             self.assertTrue(requests[0]["announce"])
             self.assertNotIn("authSig", requests[0]["media_content_id"])
@@ -427,14 +449,17 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
 class EncoderStopTests(unittest.IsolatedAsyncioTestCase):
     async def test_stop_while_encoder_is_starting_cannot_leave_an_orphan_stream(self):
         started, release = asyncio.Event(), asyncio.Event()
-        encoder = SimpleNamespace(resource=object(), cancel=AsyncMock())
+        server = AudioHTTPServer("http://127.0.0.1:0", 0, "127.0.0.1")
+        spawn = asyncio.create_subprocess_exec
+        processes = []
 
-        async def start():
+        async def starting(*args, **kwargs):
+            process = await spawn(*args, **kwargs)
+            processes.append(process)
             started.set()
             await release.wait()
-            return encoder
+            return process
 
-        server = SimpleNamespace(remove=AsyncMock())
         s = Settings()
         output = SpeechOutput(
             s,
@@ -446,12 +471,13 @@ class EncoderStopTests(unittest.IsolatedAsyncioTestCase):
             AsyncMock(),
             "fake",
         )
-        with patch("app.output.LiveMP3", return_value=SimpleNamespace(start=start)):
-            writer = asyncio.create_task(output.write(TONE))
+        with patch(
+            "app.live_audio.asyncio.create_subprocess_exec", side_effect=starting
+        ):
             await started.wait()
-            await output.close()
+            closing = asyncio.create_task(output.close())
+            await asyncio.sleep(0)
             release.set()
-            await writer
-        encoder.cancel.assert_awaited_once()
-        server.remove.assert_awaited_once_with(encoder.resource)
-        self.assertIsNone(output.current)
+            await asyncio.wait_for(closing, 3)
+        self.assertIsNotNone(processes[0].returncode)
+        self.assertFalse(server.resources)

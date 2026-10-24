@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0 — Continuous conversation audio
+
+- Keep one MP3 encoder, URL, HTTP connection and Home Assistant playback request for the entire conversation. Start warming the player at wake; send silence through pauses without reopening playback.
+- Use one paced PCM output clock for both Voice PE and external output. Speech detection controls activity and optional gating only.
+- Preserve microphone input throughout full-duplex conversations; remove the per-reply input reset and echo delay in that mode. Default new configurations to full duplex.
+- Bound incoming PCM and encoded HTTP memory. Reconnect near the live edge; expire the URL on session close. Remove obsolete packet-gap segmentation and completed-clip retention settings.
+- Preserve idle/session limits and stop cleanup. Do not wait for an announcement service response before streaming audio.
+- No firmware update required beyond existing 2.0.0. Physical WiiM buffering and external-speaker echo still require testing.
+
 ## 1.0.0 — GPT-Live redesign
 
 - Replace the Realtime/Pipecat pipeline with native GPT-Live WebSockets and a Responses reasoning backend.

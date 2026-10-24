@@ -7,6 +7,7 @@ import os
 
 import aiohttp
 from aiohttp import web
+
 from app.device import Device
 from app.live_audio import AudioHTTPServer
 from app.live_session import LiveSession
@@ -43,7 +44,9 @@ class VoiceBridge:
             )
         if self.s.tts_output == "media_player":
             self.server = AudioHTTPServer(
-                self.s.tts_stream_base_url, self.s.tts_stream_port
+                self.s.tts_stream_base_url,
+                self.s.tts_stream_port,
+                buffer_seconds=self.s.tts_stream_buffer_seconds,
             )
             await self.server.start()
             log.info("Speech HTTP listening on port %d", self.server.port)
