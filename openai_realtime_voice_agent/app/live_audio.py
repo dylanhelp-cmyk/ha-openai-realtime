@@ -45,15 +45,23 @@ class AudioHTTPServer:
 
     No HA tokens or signed query strings reach the player. WiiM Audio can add
     its announcement cache parameter without invalidating authorization. Every
-    response gets a different path, including repeated wake chimes.
+    response gets a different path, including repeated greetings.
     """
 
     def __init__(self, public_base_url, port=18082, host="0.0.0.0"):
         parsed = urlsplit(public_base_url)
-        if (parsed.scheme not in {"http", "https"} or not parsed.hostname
-                or parsed.username or parsed.password or parsed.query or parsed.fragment
-                or parsed.path not in {"", "/"}):
-            raise ValueError("tts_stream_base_url must be a speaker-reachable HTTP base URL")
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+            or parsed.path not in {"", "/"}
+        ):
+            raise ValueError(
+                "tts_stream_base_url must be a speaker-reachable HTTP base URL"
+            )
         self.public_base_url = public_base_url.rstrip("/")
         self.port, self.host = port, host
         self.resources = {}
@@ -91,8 +99,11 @@ class AudioHTTPServer:
         resource = self.resources.get(request.match_info["name"])
         if resource is None or resource.aborted:
             raise web.HTTPNotFound()
-        headers = {"Cache-Control": "no-store, no-cache, must-revalidate",
-                   "Content-Type": "audio/mpeg", "Accept-Ranges": "none"}
+        headers = {
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Content-Type": "audio/mpeg",
+            "Accept-Ranges": "none",
+        }
         if request.method == "HEAD":
             if resource.finished.is_set():
                 headers["Content-Length"] = str(len(resource.data))
@@ -103,12 +114,15 @@ class AudioHTTPServer:
             async with asyncio.timeout(10):
                 async with resource.changed:
                     await resource.changed.wait_for(
-                        lambda: bool(resource.data) or resource.finished.is_set())
+                        lambda: bool(resource.data) or resource.finished.is_set()
+                    )
             if resource.aborted or not resource.data:
                 raise web.HTTPNotFound()
             total = str(len(resource.data)) if resource.finished.is_set() else "*"
             headers["Content-Range"] = f"bytes 0-0/{total}"
-            return web.Response(status=206, body=bytes(resource.data[:1]), headers=headers)
+            return web.Response(
+                status=206, body=bytes(resource.data[:1]), headers=headers
+            )
         # Live MP3 has no seekable length. Ignore other Range headers and send
         # the complete stream with 200, as permitted for non-range resources.
         if resource.finished.is_set():
@@ -124,7 +138,11 @@ class AudioHTTPServer:
                 while True:
                     async with resource.changed:
                         await resource.changed.wait_for(
-                            lambda: len(resource.data) > offset or resource.finished.is_set())
+                            lambda: (
+                                len(resource.data) > offset
+                                or resource.finished.is_set()
+                            )
+                        )
                         chunk = bytes(resource.data[offset:])
                         done = resource.finished.is_set()
                     if resource.aborted:
@@ -168,12 +186,35 @@ class LiveMP3:
 
     async def start(self):
         self.process = await asyncio.create_subprocess_exec(
-            "ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "s16le",
-            "-ar", str(self.sample_rate), "-ac", str(self.channels),
-            "-probesize", "32", "-analyzeduration", "0", "-i", "pipe:0",
-            "-codec:a", "libmp3lame", "-b:a", "128k", "-write_xing", "0",
-            "-flush_packets", "1", "-f", "mp3", "pipe:1",
-            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "s16le",
+            "-ar",
+            str(self.sample_rate),
+            "-ac",
+            str(self.channels),
+            "-probesize",
+            "32",
+            "-analyzeduration",
+            "0",
+            "-i",
+            "pipe:0",
+            "-codec:a",
+            "libmp3lame",
+            "-b:a",
+            "128k",
+            "-write_xing",
+            "0",
+            "-flush_packets",
+            "1",
+            "-f",
+            "mp3",
+            "pipe:1",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
         )
         self.reader = asyncio.create_task(self._read())
@@ -184,7 +225,11 @@ class LiveMP3:
             while chunk := await self.process.stdout.read(4096):
                 await self.resource.append(chunk)
             await self.process.wait()
-            error = RuntimeError("Live MP3 encoder failed") if self.process.returncode else None
+            error = (
+                RuntimeError("Live MP3 encoder failed")
+                if self.process.returncode
+                else None
+            )
             await self.resource.finish(error)
         except Exception as exc:
             await self.resource.finish(exc)
@@ -203,7 +248,11 @@ class LiveMP3:
         threshold = max(1, int(16000 * self.prebuffer_ms / 1000))
         async with self.resource.changed:
             await self.resource.changed.wait_for(
-                lambda: len(self.resource.data) >= threshold or self.resource.finished.is_set())
+                lambda: (
+                    len(self.resource.data) >= threshold
+                    or self.resource.finished.is_set()
+                )
+            )
         if self.resource.error:
             raise self.resource.error
         if not self.resource.data:

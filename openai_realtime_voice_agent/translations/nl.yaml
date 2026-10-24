@@ -1,327 +1,163 @@
-# Nederlandse namen + uitleg voor het Configuratie-tabblad. Gebruikers met
-# Home Assistant in het Nederlands zien automatisch deze teksten; anderen de
-# Engelse (en.yaml). Groepen via emoji-prefix — zelfde volgorde als config.yaml.
 configuration:
-  # --- 🔑 Basis ---
   openai_api_key:
-    name: "🔑 Basis · OpenAI API-sleutel"
-    description: >-
-      Je persoonlijke OpenAI-sleutel (begint met sk-...). Maak er één aan op
-      platform.openai.com → API keys, en zorg dat facturering is ingesteld.
-      Alles wat de assistent doet — luisteren, denken, praten, zoeken op
-      internet — loopt via deze sleutel.
+    name: OpenAI API key
+    description: Project key with GPT-Live and your chosen Responses backend enabled. Kept in the add-on;
+      never sent to the Voice PE or speaker.
   instructions:
-    name: "🔑 Basis · Persoonlijkheid (systeemprompt)"
-    description: >-
-      Instructies in gewone taal die de assistent vormen: karakter, taal en
-      huisregels. Schrijf het alsof je een persoon instrueert. Twee tips die
-      er op een spraakapparaat toe doen: leg de taal vast ("Spreek en versta
-      uitsluitend Nederlands. Wissel nooit van taal.") en zeg dat hij zijn
-      gereedschap stil moet gebruiken in plaats van "momentje" te zeggen.
-      BEWERK-TIP: dit veld is hier één regel (een beperking van de Home
-      Assistant-interface) — gebruik voor comfortabel bewerken het ⋮-menu
-      bovenaan dit tabblad → "Bewerken als YAML": dan krijg je een volwaardige
-      teksteditor.
-  transcription_language:
-    name: "🔑 Basis · Spreektaal (bijv. nl, en, de)"
-    description: >-
-      Tweeletterige code van de taal die je tegen het apparaat spreekt. Dit
-      voorkomt dat de assistent naar een andere taal afdwaalt, ÉN schrijft wat
-      jij zei in het add-on-log (de 🗣️-regels — handig om te zien wat hij
-      verstond). Leeg = automatisch detecteren (geen transcript in het log).
-
-  # --- 🗣️ Model & stem ---
-  openai_model:
-    name: "🗣️ Model & stem · Model"
-    description: >-
-      Het OpenAI-model dat luistert en praat. gpt-realtime-2 (standaard) is
-      het nieuwste en slimste. gpt-realtime-mini is merkbaar goedkoper maar
-      minder slim. Wil je een model dat er niet tussen staat? Kies "custom"
-      en zet onderaan deze pagina "Toon ongebruikte optionele
-      configuratie-opties" aan om het custom-veld zichtbaar te maken.
-  openai_model_custom:
-    name: "🗣️ Model & stem · Model (custom)"
-    description: >-
-      Alleen gebruikt als Model op "custom" staat. Elk geldig OpenAI
-      Realtime-model-id. (Standaard verborgen — dit is een expert-optie.)
+    name: Voice personality
+    description: GPT-Live conversation prompt. Keep the Backchannel, Interruption and Delegation policies,
+      including Generate <|SpawnThinking|> for device/tool requests. Edit as YAML for multiple lines.
+  backend_instructions:
+    name: Reasoning and device-control instructions
+    description: Task rules for the separate Responses backend. Describe how to use Home Assistant tools
+      and report failures accurately. Voice style belongs in Voice personality.
+  opening_greeting:
+    name: Opening greeting
+    description: GPT-Live is asked to speak this once after each wake, then listen. Empty disables the
+      greeting. It may paraphrase or stay silent; this is live generation, not a prerecorded clip.
+  greeting_language:
+    name: Greeting language
+    description: Language used for the opening greeting before the user has spoken, for example English.
   openai_voice:
-    name: "🗣️ Model & stem · Stem"
-    description: >-
-      De stem waarmee hij praat. marin en cedar zijn de nieuwste en klinken
-      het natuurlijkst. Een lopend gesprek houdt zijn stem — herstart de
-      add-on na het wijzigen. Voor een stem die er niet tussen staat: kies
-      "custom" en zet onderaan "Toon ongebruikte optionele
-      configuratie-opties" aan.
-  openai_voice_custom:
-    name: "🗣️ Model & stem · Stem (custom)"
-    description: >-
-      Alleen gebruikt als Stem op "custom" staat. Elke geldige
-      OpenAI-stemnaam. (Standaard verborgen.)
-  openai_speed:
-    name: "🗣️ Model & stem · Spreektempo"
-    description: >-
-      1.0 = normaal. Lager is langzamer en duidelijker (minimaal 0.25), hoger
-      is sneller (maximaal 1.5). Verandert alleen het tempo, niet de woorden.
-  max_output_tokens:
-    name: "🗣️ Model & stem · Maximale antwoordlengte"
-    description: >-
-      Begrenst hoe lang een antwoord mag worden, in tokens (≈ 0,75 woord per
-      stuk). 0 = geen limiet. Zet bijv. 1024 als hij soms blijft doorpraten;
-      te laag kapt antwoorden midden in een zin af.
-
-  # --- 💬 Gesprek ---
-  follow_up_listen_seconds:
-    name: "💬 Gesprek · Naluisteren (seconden)"
-    description: >-
-      Na een antwoord blijft het apparaat zo lang luisteren, zodat je gewoon
-      kunt doorpraten — zonder opnieuw het wake-woord te zeggen. De LED-ring
-      toont ondertussen de luisterkleur. 8 voelt natuurlijk; 0 zet het uit
-      (wake-woord voor elke vraag).
-  follow_up_open_delay_ms:
-    name: "💬 Gesprek · Naluister-vertraging (ms)"
-    description: >-
-      Korte pauze tussen het einde van een antwoord en het heropenen van de
-      microfoon, zodat de laatste echo uit de speaker geen spookvraag kan
-      veroorzaken. 700 (standaard) dekt de speaker-naloop veilig af. Lager
-      (300–500) maakt doorpraten vlotter, maar dan kan de assistent zijn
-      eigen echo gaan beantwoorden — verhoog weer als hij soms "tegen
-      niemand" praat of zichzelf herhaalt.
-  wake_open_delay_ms:
-    name: "💬 Gesprek · Wake-microfoon-vertraging (ms)"
-    description: >-
-      Dezelfde echo-bescherming vlak na het wake-woord: een korte pauze na de
-      wake-toon voordat de microfoon opengaat, zodat het geluid van de toon
-      zelf niet naar binnen lekt en als vraag wordt opgevat. 700 (standaard)
-      is veilig. Lager voor een vlottere wake; verhoog als het uitspreken van
-      het wake-woord soms een antwoord op niets uitlokt.
-  vad_eagerness:
-    name: "💬 Gesprek · Beurtwissel-snelheid"
-    description: >-
-      Hoe snel de assistent beslist dat je uitgesproken bent. "low"
-      (standaard) wacht geduldig — het fijnst als je midden in een zin even
-      nadenkt. "high" antwoordt sneller maar kan je afkappen. "auto" laat
-      OpenAI kiezen.
-  phase_idle_debounce_ms:
-    name: "💬 Gesprek · Einde-antwoord-marge (ms)"
-    description: >-
-      Hoe lang de assistent stil moet zijn voordat het apparaat het antwoord
-      als afgerond beschouwt. Dit overbrugt de natuurlijke pauzes tussen
-      zinnen en tijdens smart-home-acties, zodat de LED en het "stop"-woord
-      het hele antwoord blijven werken. 1500 is een goede standaard; verhoog
-      als het apparaat midden in lange antwoorden al op rust springt.
-
-  # --- 🌐 Websearch ---
+    name: Live voice
+    description: A supported GPT-Live voice name, for example cedar, marin or quartz. Takes effect on
+      the next conversation.
+  backend_model:
+    name: Reasoning backend model
+    description: Responses model for device control and reasoning, separate from gpt-live-1. Default gpt-6-luna;
+      choose a model your API project can access.
+  backend_reasoning_effort:
+    name: Backend reasoning effort
+    description: Use low for quick routine controls, or default to omit the setting. Supported values
+      depend on the backend model.
+  backend_max_output_tokens:
+    name: Backend output limit
+    description: Maximum tokens for backend reasoning and tool results. Too low can prevent a tool workflow
+      completing.
+  backend_parallel_tools:
+    name: Parallel backend tools
+    description: Allow independent tool calls together. Off runs tool calls sequentially; failed mutations
+      are never automatically retried.
   enable_web_search:
-    name: "🌐 Websearch · Zoeken op internet"
-    description: >-
-      Laat de assistent dingen online opzoeken: weer, nieuws, openingstijden,
-      actualiteiten. Elke zoekactie is één extra OpenAI-aanroep op jouw
-      sleutel (een paar cent) en duurt een paar seconden extra. Standaard aan.
-  web_search_model:
-    name: "🌐 Websearch · Zoekmodel"
-    description: >-
-      Het model dat de zoekopdracht uitvoert en het antwoord samenvat.
-      gpt-5.5 (standaard) geeft de beste antwoorden; mini/nano-modellen zijn
-      goedkoper maar missen meer. Voor een ander model: kies "custom" en zet
-      onderaan "Toon ongebruikte optionele configuratie-opties" aan.
-  web_search_model_custom:
-    name: "🌐 Websearch · Zoekmodel (custom)"
-    description: >-
-      Alleen gebruikt als Zoekmodel op "custom" staat. Elk model dat OpenAI's
-      web_search-tool ondersteunt. (Standaard verborgen.)
-
-  # --- 🎚️ Audio ---
-  tts_output:
-    name: "🎚️ Audio · Spraakuitvoer"
-    description: >-
-      "voice_pe" speelt antwoorden op de Voice PE af. "media_player" stuurt
-      dezelfde OpenAI-stem naar de hieronder gekozen Home Assistant-speaker.
-      Kies hieronder stream om tijdens het genereren al te beginnen met afspelen.
-      Herstart de add-on na een wijziging. Firmware 1.3.0+ verplaatst ook het
-      wake-geluid naar die speaker en wacht voordat de microfoon opengaat.
-  tts_media_player:
-    name: "🎚️ Audio · Mediaspeler voor spraak"
-    description: >-
-      Entity-ID van de speaker voor "media_player", bijvoorbeeld
-      media_player.woonkamer. De speler moet HTTP-MP3-audio of lokale bestanden
-      via Home Assistants mediabron kunnen afspelen. Alleen Spotify werkt niet.
-      Laat leeg bij "voice_pe".
-  tts_announce:
-    name: "🎚️ Audio · Spraak als aankondiging"
-    description: >-
-      Vraag afspelen als aankondiging aan, zodat ondersteunde spelers hun
-      vorige muziek hervatten. Ondersteuning hangt af van de integratie.
-      Uit gebruikt normaal afspelen en vervangt de huidige media.
-      Stel voor WiiM Audio hieronder het Audio-HTTP-adres in. Vorige antwoorden
-      van de assistent worden vervangen en niet als muziek hervat.
-  tts_delivery:
-    name: "Audio · Externe levering"
-    description: >-
-      stream begint met afspelen terwijl OpenAI het antwoord nog genereert.
-      buffered wacht op elk compleet audiosegment. Stream vereist een
-      Audio-HTTP-adres. Sla op en herstart na wijzigingen.
-  tts_stream_base_url:
-    name: "Audio · Audio-HTTP-adres"
-    description: >-
-      Adres waarop de speaker audio ophaalt, bijvoorbeeld
-      http://192.168.1.100:18082 met JOUW Home Assistant-LAN-IP.
-      Gebruik dezelfde poort als hieronder en voor WiiM een IP in plaats van
-      een .local-hostnaam. Leeg gebruikt de oorspronkelijke HA-mediabron.
-      Werkt met zowel stream als buffered.
-  tts_stream_port:
-    name: "Audio · Audio-HTTP-poort"
-    description: >-
-      Vrije poort voor tijdelijke audio op je netwerk (standaard 18082).
-      Gebruik hetzelfde nummer in het Audio-HTTP-adres. Dit is niet de
-      bestaande apparaatpoort van de Voice PE.
-  tts_stream_prebuffer_ms:
-    name: "Audio · Streambuffer (ms)"
-    description: >-
-      Gecodeerde audio verzameld voordat live afspelen wordt aangevraagd.
-      Begin met 120. Lager start eerder; verhoog naar 250–500 bij haperingen.
-      Deze buffer geldt voor externe speakers, niet voor de Voice PE.
-  tts_stream_start_timeout_s:
-    name: "Audio · Ophaaltime-out (seconden)"
-    description: >-
-      Maximale wachttijd totdat de speaker de audio-URL ophaalt. Dit is een
-      fouttime-out, geen extra vertraging bij normaal afspelen. Controleer bij
-      een time-out of het Audio-HTTP-adres en de poort bereikbaar zijn.
-  tts_completion_mode:
-    name: "Audio · Einde van afspelen"
-    description: >-
-      auto gebruikt met Audio HTTP de echte ophaaltijd en audioduur, zodat
-      trage HA-statusupdates geen extra wachttijd geven. duration gebruikt
-      altijd de duur. state gebruikt de HA-status met begrensde wachttijd.
-      Begin voor WiiM met auto en stel de opstartmarge af.
-  tts_start_allowance_ms:
-    name: "Audio · Opstartmarge speaker (ms)"
-    description: >-
-      Extra marge voor de interne speakerbuffer boven op de audioduur.
-      Begin met 300. Verlaag als de microfoon laat opent; verhoog als er dan
-      nog audio klinkt. Geldt voor het weksignaal en gesproken antwoorden.
-  tts_finish_grace_ms:
-    name: "Audio · Extra eindmarge (ms)"
-    description: >-
-      Maximale extra wachttijd voor een eindstatus van HA in state-modus
-      (standaard 1500). Heeft geen invloed op de HTTP-duurklok in auto-modus.
-  tts_state_poll_ms:
-    name: "Audio · Statusinterval (ms)"
-    description: >-
-      Interval tussen HA-statuscontroles (standaard 100). Een korter interval
-      laat de integratie zelf niet sneller verversen. Auto met Audio HTTP
-      vermijdt deze controles en de bijbehorende vertraging.
-  tts_state_timeout_ms:
-    name: "Audio · Time-out statusverzoek (ms)"
-    description: >-
-      Limiet per HA-statusverzoek (standaard 500), zodat een traag verzoek de
-      microfoon niet meerdere seconden ophoudt.
-  playback_prebuffer_ms:
-    name: "🎚️ Audio · Afspeelbuffer (ms)"
-    description: >-
-      Hoeveel van het antwoord het apparaat verzamelt voordat het begint af te
-      spelen. Een grotere buffer vangt korte wifi-haperingen op (het
-      incidentele krakje), maar elk antwoord begint zoveel later. 150 is een
-      goede balans; verhoog naar 250–300 bij blijvend kraken, 0 = direct
-      afspelen.
-  noise_reduction:
-    name: "🎚️ Audio · Microfoon-ruisonderdrukking"
-    description: >-
-      Extra filtering van je stem voordat die naar OpenAI gaat. "off" is
-      meestal prima — het apparaat filtert zelf al. Probeer "near_field" als
-      je dichtbij praat, "far_field" voor door de kamer heen, wanneer hij je
-      in een rumoerige omgeving slecht verstaat.
-
-  # --- 🏠 Home Assistant ---
-  ha_mcp_url:
-    name: "🏠 Home Assistant · MCP-server-URL"
-    description: >-
-      Hoe de assistent je huis bestuurt. LEEG laten (aanbevolen): dan gebruikt
-      hij Home Assistants ingebouwde "MCP Server"-integratie — installeer die
-      integratie en stel je entiteiten beschikbaar aan Assist. Vul alleen een
-      URL in als je de losse ha-mcp-add-on gebruikt.
-  longlived_token:
-    name: "🏠 Home Assistant · Toegangstoken"
-    description: >-
-      Leeg laten (aanbevolen): de add-on gebruikt zijn eigen ingebouwde
-      toestemming. Maak alleen een long-lived token aan (je HA-profiel →
-      Beveiliging) als het log bij het opstarten een 401/403-fout toont.
-  mcp_tool_allowlist:
-    name: "🏠 Home Assistant · Tool-allowlist"
-    description: >-
-      Kommagescheiden lijst van besturingstools die de assistent mag
-      gebruiken; leeg = allemaal. Met de ingebouwde MCP-server kun je dit
-      leeg laten. Vooral nuttig met de ha-mcp-add-on (80+ tools) om gesprekken
-      snel en goedkoop te houden.
-  mcp_preload_context:
-    name: "Home Assistant · Apparaatnamen vooraf laden"
-    description: >-
-      Lees de bestaande Assist-apparatencatalogus bij het verbinden, zodat
-      bekende namen rechtstreeks naar de besturingstools gaan. Er is geen
-      verplichte zoekactie per opdracht. Alleen onbekende of dubbelzinnige
-      namen en mislukte zoekacties vereisen nieuwe ontdekking. Er worden geen
-      extra entiteiten blootgesteld. Uit gebruikt alleen zoeken op aanvraag.
-
-  # --- ⚙️ Geavanceerd ---
+    name: Web search
+    description: Give the Responses backend hosted web search. Charged separately from voice; no separate
+      search-model setting.
   websocket_port:
-    name: "⚙️ Geavanceerd · Apparaat-poort"
-    description: >-
-      De poort waarop de Voice PE verbindt. Moet overeenkomen met de va_url in
-      de apparaat-firmware (stable 8080, dev 8081). Alleen wijzigen bij een
-      poortconflict — en pas dan ook de firmware-stub aan.
-  session_reuse_timeout_seconds:
-    name: "⚙️ Geavanceerd · Gesprek hervatten binnen (seconden)"
-    description: >-
-      Verbindt het apparaat binnen dit aantal seconden opnieuw (wifi-hapering,
-      add-on-herstart), dan gaat het gesprek verder waar het was. 300 (5 min)
-      is een goede standaard; 0 = altijd opnieuw beginnen.
-  max_context_messages:
-    name: "⚙️ Geavanceerd · Gespreksgeheugen (berichten)"
-    description: >-
-      Hoeveel recente uitwisselingen de assistent binnen een gesprek onthoudt.
-      Meer = beter geheugen, maar elk antwoord rekent de hele historie opnieuw
-      af, dus lange gesprekken worden duurder en kunnen tegen OpenAI-limieten
-      aanlopen. 12 is een goede balans; 0 = onbeperkt.
-  transcription_model:
-    name: "⚙️ Geavanceerd · Transcriptmodel"
-    description: >-
-      Alleen gebruikt als bij Basis een spreektaal is ingesteld. Dit model
-      schrijft jouw spraak als tekst in het log — het beïnvloedt NIET hoe de
-      assistent je verstaat (die hoort je echte stem). gpt-4o-transcribe
-      (standaard) is het nauwkeurigst. Voor een ander model: kies "custom" en
-      zet onderaan "Toon ongebruikte optionele configuratie-opties" aan.
-  transcription_model_custom:
-    name: "⚙️ Geavanceerd · Transcriptmodel (custom)"
-    description: >-
-      Alleen gebruikt als Transcriptmodel op "custom" staat. (Standaard
-      verborgen.)
-  turn_detection_type:
-    name: "⚙️ Geavanceerd · Beurtdetectie (legacy)"
-    description: >-
-      Hoe het einde van je vraag wordt herkend. Normaal NIET instellen: de
-      assistent begrijpt dan zelf wanneer je zin af is (semantic_vad).
-      "server_vad" is de oude stiltetimer-methode, afgesteld met de drie
-      velden hieronder — alleen bewaard als noodluik.
-  vad_threshold:
-    name: "⚙️ Geavanceerd · server_vad: geluidsdrempel"
-    description: >-
-      Alleen bij server_vad. Hoe hard iets moet klinken om als spraak te
-      tellen (0–1, standaard 0.5). Hoger = minder valse triggers door
-      achtergrondgeluid.
-  vad_prefix_padding_ms:
-    name: "⚙️ Geavanceerd · server_vad: aanloop (ms)"
-    description: >-
-      Alleen bij server_vad. Audio van vlak vóór de spraakdetectie die wordt
-      meegenomen, zodat je eerste woord niet wegvalt (standaard 300).
-  vad_silence_duration_ms:
-    name: "⚙️ Geavanceerd · server_vad: stilte = einde vraag (ms)"
-    description: >-
-      Alleen bij server_vad. Hoe lang een stilte je vraag beëindigt
-      (standaard 800). Verhoog als je wordt afgekapt bij een pauze.
-
-  # --- 🔍 Debug ---
-  enable_recording:
-    name: "🔍 Debug · Audio opnemen"
-    description: >-
-      Slaat microfoon- en speakeraudio op in bestanden binnen de add-on,
-      alleen voor probleemanalyse. Normaal uit laten.
-
+    name: Voice PE device port
+    description: Keep your working port, for example 18081. Must match the device va_url. The add-on does
+      not change it automatically.
+  ha_mcp_url:
+    name: Home Assistant MCP address
+    description: Empty uses the built-in MCP Server at supervisor/core/api/mcp. Only entities exposed
+      to Assist are available.
+  longlived_token:
+    name: Home Assistant access token
+    description: 'Normally empty: uses the existing SUPERVISOR_TOKEN. Only needed for a custom MCP server
+      or installation without Supervisor permissions.'
+  mcp_tool_allowlist:
+    name: Allowed HA tools
+    description: Comma-separated exact tool names. Empty keeps all tools already exposed by your MCP server.
+      Does not expand Assist entity permissions.
+  mcp_preload_context:
+    name: Preload device names
+    description: Read Assist device context once at add-on startup. Known names go directly to control
+      tools, with no catalogue request before every command.
+  tts_output:
+    name: Speech output
+    description: voice_pe plays through the device; media_player streams live MP3 to your selected network
+      speaker. Wake chimes are removed in both modes.
+  tts_media_player:
+    name: Speech media player
+    description: Exact entity ID, for example media_player.living_room_speakers. Used only for media_player
+      output.
+  tts_announce:
+    name: Request announcements
+    description: Ask the player integration to restore supported music sources. Spotify Connect cannot
+      auto-resume through the current WiiM integration. Previous assistant audio is never intentionally
+      restored as music.
+  tts_stream_base_url:
+    name: Audio HTTP address
+    description: Speaker-reachable LAN base URL, for example http://192.168.1.100:18082. Required for
+      external output. Replace the IP with your HA host and keep this port on the LAN.
+  tts_stream_port:
+    name: Audio HTTP port
+    description: Free port for temporary MP3 streams, default 18082. Must match Audio HTTP address and
+      differ from the Voice PE device port.
+  tts_stream_prebuffer_ms:
+    name: Speaker stream prebuffer (ms)
+    description: MP3 collected before requesting playback. Default 120. Reduce for quicker startup; raise
+      if it stutters.
+  tts_stream_start_timeout_s:
+    name: Speaker fetch timeout (seconds)
+    description: Maximum wait for the speaker to fetch its URL. A failure timeout, not a delay added to
+      successful playback.
+  tts_start_allowance_ms:
+    name: Playback startup/tail allowance (ms)
+    description: Margin beyond audio duration before treating playback as finished. Default 300. Raise
+      if the mic opens before the last sound ends; lower if it opens late. Local and external output both
+      use this.
+  playback_prebuffer_ms:
+    name: Voice PE jitter buffer (ms)
+    description: Device-local PCM cushion. Default 100; affects Voice PE output only. New firmware reads
+      this on reconnect.
+  microphone_mode:
+    name: Microphone mode
+    description: gated closes mic during audible playback to avoid speaker echo. full_duplex keeps it
+      open for Live interruptions; experimental with external speakers because there is no shared echo-cancellation
+      reference.
+  mic_reopen_delay_ms:
+    name: Microphone echo guard (ms)
+    description: Additional quiet margin after actual playback before reopening a gated mic. No wake delay
+      or chime is added. Default 150.
+  output_silence_ms:
+    name: Speech segment silence (ms)
+    description: Continuous quiet audio that closes a speech segment. GPT-Live has no response-audio-done
+      event. Default 350; raise if short pauses split speech too much.
+  output_gap_timeout_ms:
+    name: Output packet gap (ms)
+    description: Fallback segment boundary if Live stops sending packets. Default 600. Raise for unstable
+      connections; lower only after testing.
+  output_silence_threshold_db:
+    name: Output silence threshold (dBFS)
+    description: Audio quieter than this counts as silence. Default -55. More negative retains quieter
+      speech but can treat background noise as speech.
+  input_activity_threshold_db:
+    name: Input activity threshold (dBFS)
+    description: Microphone level that refreshes the conversation idle timer. Default -42. Raise for a
+      noisy room; lower for quiet voices. This is not a server VAD setting.
+  input_buffer_ms:
+    name: Startup microphone buffer (ms)
+    description: Bounded capture while connecting to Live. Default 600. Increase if immediate words are
+      lost during slow startup; excess oldest audio is dropped and counted in logs.
+  idle_timeout_seconds:
+    name: Conversation idle timeout (seconds)
+    description: Close the paid Live session after this much quiet, once playback and backend work are
+      finished. Default 15. A socket to the Voice PE can remain connected without Live billing.
+  max_session_seconds:
+    name: Maximum conversation (seconds)
+    description: Hard limit on a paid session, even if background noise keeps it active. Default 180;
+      wake again to start another.
+  session_start_timeout_s:
+    name: Live connection timeout (seconds)
+    description: Failure limit while starting Live. Audio capture starts on wake and is bounded by Startup
+      microphone buffer.
+  session_close_timeout_s:
+    name: Live close timeout (seconds)
+    description: Wait briefly for session.closed and final usage on normal idle closure. A forced disconnect
+      can leave final usage unconfirmed.
+  greeting_timeout_s:
+    name: Greeting diagnostic timeout (seconds)
+    description: Log if no audible greeting arrives by this time. The microphone remains available; the
+      app does not replay or repeatedly request a greeting.
+  tool_timeout_s:
+    name: Home Assistant tool timeout (seconds)
+    description: Limit for MCP discovery and each call. A failed action may have an unknown outcome; it
+      is never blindly retried.
+  audio_retention_seconds:
+    name: Temporary audio retention (seconds)
+    description: Expiry for generated speaker resources. No public file listing or HA credentials in audio
+      URLs.
+  log_transcripts:
+    name: Log conversation transcripts
+    description: Off by default. Enable only when needed for troubleshooting; user and assistant text
+      will appear in add-on logs.

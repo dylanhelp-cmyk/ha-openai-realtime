@@ -1,12 +1,12 @@
 {
-  "name": "OpenAI Realtime 2 Voice Agent (Dylan fork)",
+  "name": "GPT-Live Voice Agent (Dylan fork)",
   "url": "https://github.com/dylanhelp-cmyk/ha-openai-realtime",
   "maintainer": "dylanhelp-cmyk (fork of xandervanerven/ha-openai-realtime)",
   "addons": [
     {
       "slug": "openai_realtime_voice_agent",
-      "name": "OpenAI Realtime 2 Voice Agent (Dylan fork)",
-      "version": "0.7.1"
+      "name": "GPT-Live Voice Agent (Dylan fork)",
+      "version": "1.0.0"
     }
   ]
 }

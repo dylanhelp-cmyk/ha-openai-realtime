@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.0 — GPT-Live redesign
+
+- Replace the Realtime/Pipecat pipeline with native GPT-Live WebSockets and a Responses reasoning backend.
+- Start microphone capture and session creation at wake. Request the configured greeting once; remove local/external wake-chime generation and associated delays.
+- Reuse existing HA MCP tools and Assist permissions. Preload names once at startup; preserve structured errors and deduplicate tool calls.
+- Stream speech progressively to the Voice PE or HTTP MP3 speakers. Use configurable silence/gap boundaries and fetch-based playback timing.
+- Expose gated/full-duplex microphone mode, echo delay, buffers, thresholds, session/tool timeouts and duration caps.
+- Close paid sessions between conversations. Remove redundant VAD, transcription, media-source file fallback, web-search wrapper, recording and session-reuse code/settings.
+- Require companion firmware 2.0.0 for the full protocol and local greeting-first behaviour. Preserve the installation slug and existing port/speaker/auth option names.
+
+
 All notable changes to this add-on. Newest first.
 
 ## 0.8.0
