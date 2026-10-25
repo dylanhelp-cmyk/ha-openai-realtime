@@ -28,7 +28,8 @@ class SpeechOutput:
         token,
         *,
         wake_started_at=None,
-        local_cue_done=None,
+        wake_cue=None,
+        on_cue_handoff=None,
     ):
         self.s, self.device, self.http, self.server = (
             settings,
@@ -37,7 +38,17 @@ class SpeechOutput:
             audio_server,
         )
         self.on_start, self.on_end, self.on_error = on_start, on_end, on_error
-        self.local_cue_done = local_cue_done
+        cue_audio = wake_cue or b""
+        self.cue_frames = deque(
+            cue_audio[i : i + FRAME_BYTES].ljust(FRAME_BYTES, b"\0")
+            for i in range(0, len(cue_audio), FRAME_BYTES)
+        )
+        self.cue_done = asyncio.Event()
+        self.cue_started = False
+        self.cue_sending = False
+        self.on_cue_handoff = on_cue_handoff
+        if not self.cue_frames:
+            self.cue_done.set()
         self.token = token
         self.frames = deque()
         self.buffer = bytearray()
@@ -68,7 +79,16 @@ class SpeechOutput:
     @property
     def active(self):
         # Keepalive silence must not keep the paid conversation alive forever.
-        return self.speaking or self.pending_speech > 0
+        return (
+            self.speaking
+            or self.pending_speech > 0
+            or bool(self.cue_frames)
+            or self.cue_sending
+        )
+
+    @property
+    def queued_audio_ms(self):
+        return (len(self.cue_frames) + len(self.frames)) * 20
 
     async def write(self, audio):
         if self.closed:
@@ -84,7 +104,7 @@ class SpeechOutput:
                 self.timing.output_received(
                     loud,
                     time.monotonic(),
-                    len(self.frames) * 20,
+                    self.queued_audio_ms,
                     self.mic_queue_ms(),
                     self.pending_speech * 20,
                 )
@@ -211,6 +231,8 @@ class SpeechOutput:
 
     async def _run(self):
         try:
+            if self.device.wake_id != self.wake_id:
+                return
             if self.s.tts_output == "airplay":
                 self.airplay = AirPlayOutput(self.s)
                 await self.airplay.start()
@@ -231,11 +253,11 @@ class SpeechOutput:
                     return
                 self.playback = asyncio.create_task(self._external())
             else:
-                if self.local_cue_done:
-                    await self.local_cue_done.wait()
                 self.ready.set()
             deadline = time.monotonic()
             while not self.closed:
+                if self.device.wake_id != self.wake_id:
+                    return
                 if self.airplay:
                     self.airplay.check()
                 if self.playback and self.playback.done():
@@ -255,10 +277,12 @@ class SpeechOutput:
                         raise RuntimeError("Conversation speaker disconnected")
                 # Warm the external player with silence immediately at wake.
                 # Retain the greeting until the player has actually fetched.
-                available = (
-                    not self.encoder or self.encoder.resource.fetched.is_set()
-                ) and (not self.local_cue_done or self.local_cue_done.is_set())
-                if available and self.frames:
+                available = not self.encoder or self.encoder.resource.fetched.is_set()
+                is_cue = available and bool(self.cue_frames)
+                if is_cue:
+                    frame, loud, marker = self.cue_frames.popleft(), False, None
+                    self.cue_sending = True
+                elif available and self.frames:
                     frame, loud, marker = self.frames.popleft()
                     self.pending_speech -= int(loud)
                 else:
@@ -272,6 +296,14 @@ class SpeechOutput:
                     await self.encoder.write(frame)
                 else:
                     await self.device.audio(frame)
+                if is_cue:
+                    first, last = not self.cue_started, not self.cue_frames
+                    self.cue_started = True
+                    if self.on_cue_handoff:
+                        self.on_cue_handoff(first, last)
+                    if last:
+                        self.cue_sending = False
+                        self.cue_done.set()
                 if marker is not None:
                     self.timing.output_handed(marker, time.monotonic())
                 if loud and not self.first_speech_sent:
@@ -339,6 +371,9 @@ class SpeechOutput:
             await self.encoder.cancel()
             await self.server.remove(self.encoder.resource)
         self.frames.clear()
+        self.cue_frames.clear()
+        self.cue_sending = False
+        self.cue_done.set()
         self.buffer.clear()
         self.pending_speech = 0
         self.speaking = False

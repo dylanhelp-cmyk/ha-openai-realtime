@@ -12,7 +12,7 @@ import aiohttp
 
 from app.echo import EchoProcessor
 from app.output import SpeechOutput
-from app.pcm import FRAME_BYTES, InputAudio, dbfs
+from app.pcm import InputAudio, dbfs
 from app.turn_timing import TurnTiming
 
 log = logging.getLogger(__name__)
@@ -39,10 +39,7 @@ class LiveSession:
         )
         self.wake_id = device.wake_id
         self.wake_cue = wake_cue
-        self.cue_done = asyncio.Event()
         self.cue_started_at = self.cue_handed_at = None
-        if not wake_cue:
-            self.cue_done.set()
         self.input = InputAudio(
             max(
                 settings.input_buffer_ms,
@@ -85,8 +82,10 @@ class LiveSession:
             self.fail,
             token,
             wake_started_at=self.wake_started_at,
-            local_cue_done=self.cue_done,
+            wake_cue=wake_cue,
+            on_cue_handoff=self.cue_handoff,
         )
+        self.cue_done = self.output.cue_done
         self.output.on_reference = self.echo.reference
         self.output.timing = self.timing
         self.output.mic_queue_ms = lambda: len(self.input.data) / 48
@@ -144,9 +143,9 @@ class LiveSession:
             )
         if self.wake_cue:
             config["instructions"] += (
-                "\nStartup: the application provides a local 'Yes sir?' wake acknowledgment. "
+                "\nStartup: the application provides a cached 'Yes sir?' wake acknowledgment through the conversation speaker. "
                 "Do not greet or repeat it. Listen to the user's buffered opening request. "
-                "The local cue may be faintly audible as echo; it is not a user request."
+                "The speaker cue may be faintly audible as echo; it is not a user request."
             )
         if self.s.opening_greeting and not self.wake_cue:
             config["input"] = [
@@ -168,8 +167,6 @@ class LiveSession:
         try:
             if self.failed or self.closed:
                 return
-            if self.wake_cue:
-                self.tasks.append(asyncio.create_task(self.play_wake_cue()))
             async with asyncio.timeout(self.s.session_start_timeout_s):
                 if self.s.live_transport == "webrtc":
                     from app.webrtc import LiveWebRTC
@@ -368,25 +365,18 @@ class LiveSession:
             )
         await self.output.write(audio)
 
-    async def play_wake_cue(self):
-        """Use the existing local PCM route; never gate mic or await cloud setup."""
-        try:
-            deadline = time.monotonic()
-            for offset in range(0, len(self.wake_cue), FRAME_BYTES):
-                if self.closed or self.device.wake_id != self.wake_id:
-                    return
-                frame = self.wake_cue[offset : offset + FRAME_BYTES]
-                await self.device.audio(frame + bytes(FRAME_BYTES - len(frame)))
-                if self.cue_started_at is None:
-                    self.cue_started_at = time.monotonic()
-                    log.info(
-                        "Wake cue first handoff: wake=%d since_wake_ms=%.0f route=voice_pe voice=%s (cached PCM; not acoustic playback)",
-                        self.wake_id,
-                        (self.cue_started_at - self.wake_started_at) * 1000,
-                        self.s.openai_voice,
-                    )
-                deadline = max(deadline + 0.02, time.monotonic())
-                await asyncio.sleep(max(0, deadline - time.monotonic()))
+    def cue_handoff(self, first, last):
+        """Observe the same paced writer/reference used by normal replies."""
+        if first:
+            self.cue_started_at = time.monotonic()
+            log.info(
+                "Wake cue first handoff: wake=%d since_wake_ms=%.0f route=%s voice=%s (cached PCM through normal AEC reference; not acoustic playback)",
+                self.wake_id,
+                (self.cue_started_at - self.wake_started_at) * 1000,
+                self.s.tts_output,
+                self.s.openai_voice,
+            )
+        if last:
             self.cue_handed_at = time.monotonic()
             log.info(
                 "Wake cue handoff complete: wake=%d since_wake_ms=%.0f session_ready=%s",
@@ -394,12 +384,6 @@ class LiveSession:
                 (self.cue_handed_at - self.wake_started_at) * 1000,
                 self.ready.is_set(),
             )
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            await self.fail("Local wake acknowledgment failed")
-        finally:
-            self.cue_done.set()
 
     async def backend_event(self, event, delegation_id=None):
         kind = event.get("type")
@@ -437,7 +421,11 @@ class LiveSession:
                 task = asyncio.create_task(self._complete_tools(calls))
                 self.tool_tasks.add(task)
                 task.add_done_callback(self.tool_tasks.discard)
-            elif self.s.silent_action_success and not self.output.active:
+            elif (
+                self.s.silent_action_success
+                and not self.output.speaking
+                and not self.output.pending_speech
+            ):
                 # A silent success has no speech-end callback to clear thinking.
                 # Change LEDs only: never gate, clear, or reopen the microphone.
                 await self.device.set_phase("listening")
@@ -528,7 +516,7 @@ class LiveSession:
                 self.input.last_frame_residence_ms,
                 queued_ms,
                 self.input.dropped,
-                len(self.output.frames) * 20,
+                self.output.queued_audio_ms,
             )
         return audio
 
@@ -618,8 +606,7 @@ class LiveSession:
         if self.closed:
             return
         self.closed = True
-        # Cancel output before cancelling the cue: its finally block releases
-        # the local-output gate, which must not release queued speech on Stop.
+        # Stop the sole paced writer before any session teardown can yield.
         self.output.worker.cancel()
         current = asyncio.current_task()
         for task in self.tasks:

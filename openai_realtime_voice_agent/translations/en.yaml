@@ -1,7 +1,7 @@
 configuration:
   wake_cue_enabled:
-    name: Cached local Yes sir wake acknowledgment
-    description: Play Yes sir? through the Voice PE speaker while cloud startup runs. First enable or a voice change prepares one short PAID Live session and caches assistant audio in /data. No generation per wake. Wait for the cache-ready log before testing. Cloud readiness by cue end is not guaranteed; opening speech is buffered. Cached cue suppresses the cloud greeting.
+    name: Cached Yes sir wake acknowledgment
+    description: Play Yes sir? through the configured conversation output (WiiM for direct AirPlay), in the same paced stream and AEC reference as replies, while cloud startup runs. No separate speaker connection. First enable or a voice change prepares one short PAID Live session and caches assistant audio in /data; no generation per wake. Wait for cache-ready. Cloud readiness by cue end is not guaranteed; opening speech is buffered. No second cloud greeting.
   silent_action_success:
     name: Silent successful device commands
     description: Prompt both models to omit action acknowledgments, progress filler and success confirmations. Still report failures, uncertainty, required approvals and clarifications; answer questions normally. This is a model instruction, not a hard audio mute.

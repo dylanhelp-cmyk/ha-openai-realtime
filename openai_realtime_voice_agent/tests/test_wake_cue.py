@@ -236,9 +236,6 @@ class CueSessionTests(unittest.IsolatedAsyncioTestCase):
         live, socket = self.session()
         try:
             await live.output.write(bytes([200, 0]) * 480)
-            await asyncio.sleep(0.02)
-            self.assertFalse(socket.audio)
-            await live.play_wake_cue()
             await until(lambda: len(socket.audio) > 5)
             self.assertEqual([p[4:] for p in socket.audio[:5]], [TONE] * 5)
             self.assertEqual(socket.audio[5][4:], bytes([200, 0]) * 480)
@@ -249,10 +246,70 @@ class CueSessionTests(unittest.IsolatedAsyncioTestCase):
         live, socket = self.session()
         live.device.wake_id = 89
         try:
-            await live.play_wake_cue()
+            await asyncio.sleep(0.04)
             self.assertFalse(socket.audio)
         finally:
             await live.close()
+
+    async def test_airplay_cue_and_reply_share_sender_reference_and_keep_mic_open(self):
+        from test_airplay import SenderRig
+
+        rig = SenderRig()
+        first, second = rig.patches()
+        with first, second:
+            live, socket = self.session(
+                tts_output="airplay", airplay_host="192.0.2.50", microphone_mode="gated"
+            )
+            references = []
+            live.output.on_reference = lambda pcm, stamp: references.append(pcm)
+            live.output.on_start = AsyncMock()
+            reply = bytes([200, 0]) * 480
+            try:
+                await live.output.write(reply)
+                await until(lambda: live.output.first_speech_sent)
+                self.assertEqual(references[:6], [TONE] * 5 + [reply])
+                self.assertEqual(len(rig.calls), 1)
+                self.assertEqual(sum(b"ACTION=START" in c for c in rig.commands), 1)
+                self.assertFalse(socket.audio)  # No Voice PE speaker audio.
+                self.assertTrue(live.device.mic_enabled)
+                live.output.on_start.assert_awaited_once()  # Reply, not cue.
+                self.assertTrue(live.cue_done.is_set())
+                self.assertIsNotNone(live.cue_started_at)
+                self.assertIsNotNone(live.cue_handed_at)
+                self.assertEqual(live.output.queued_audio_ms, 0)
+            finally:
+                await live.close()
+
+    async def test_airplay_cue_runs_before_cloud_ready_and_stop_cancels_it(self):
+        from test_airplay import SenderRig
+
+        rig = SenderRig()
+        first, second = rig.patches()
+        with first, second:
+            live, socket = self.session(tts_output="airplay", airplay_host="192.0.2.50")
+            connecting = asyncio.Event()
+
+            async def connect(*args, **kwargs):
+                connecting.set()
+                await asyncio.Event().wait()
+
+            live.http = SimpleNamespace(ws_connect=connect)
+            runner = asyncio.create_task(live.run())
+            try:
+                await connecting.wait()
+                await until(lambda: live.cue_started_at is not None)
+                self.assertFalse(live.ready.is_set())
+                self.assertTrue(live.device.mic_enabled)
+                await live.close()
+                count = len(rig.chunks)
+                await asyncio.sleep(0.06)
+                self.assertEqual(len(rig.chunks), count)
+                self.assertFalse(socket.audio)
+                self.assertEqual(len(rig.calls), 1)
+            finally:
+                await live.close()
+                runner.cancel()
+                await asyncio.gather(runner, return_exceptions=True)
 
 
 class CueBridgeTests(unittest.IsolatedAsyncioTestCase):

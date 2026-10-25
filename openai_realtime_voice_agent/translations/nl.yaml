@@ -1,7 +1,7 @@
 configuration:
   wake_cue_enabled:
-    name: Lokale Yes sir-wakereactie uit cache
-    description: Speelt Yes sir? op de Voice PE terwijl de cloudsessie start. Eerste inschakeling of een andere stem genereert de clip met één korte BETAALDE Live-sessie; daarna lokale herhaling uit /data. Wacht op cache-ready in het log. Cloudgereedheid vóór het clipeinde is niet gegarandeerd; openingsspraak wordt gebufferd. Geen dubbele cloudbegroeting.
+    name: Yes sir-wakereactie uit cache
+    description: Speelt Yes sir? via de ingestelde gespreksuitgang (WiiM bij directe AirPlay), in dezelfde audiostroom en AEC-referentie als antwoorden. De cloudsessie start parallel; geen tweede luidsprekerverbinding. Eerste inschakeling of een andere stem gebruikt één korte BETAALDE Live-sessie om de clip te cachen. Geen generatie per wake. Cloudgereedheid vóór het clipeinde is niet gegarandeerd; openingsspraak wordt gebufferd.
   silent_action_success:
     name: Succesvolle apparaatopdrachten stil uitvoeren
     description: Instrueert beide modellen om aankondigingen, voortgangsvulling en succesbevestigingen weg te laten. Meldt fouten, onzekerheid en vereiste verduidelijking of toestemming; beantwoordt vragen normaal. Modelinstructie, geen harde audioblokkering.
