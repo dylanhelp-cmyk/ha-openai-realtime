@@ -149,6 +149,22 @@ class CueCacheTests(unittest.IsolatedAsyncioTestCase):
 
 
 class CueSessionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_silent_backend_completion_resets_thinking_without_mic_changes(self):
+        live, socket = self.session()
+        try:
+            await live.device.set_phase("thinking")
+            await live.backend_event(
+                {"type": "response.created", "response": {"id": "r"}}
+            )
+            await live.backend_event(
+                {"type": "response.completed", "response": {"id": "r"}}
+            )
+            self.assertEqual(live.device.phase, "listening")
+            self.assertTrue(live.device.mic_enabled)
+            self.assertFalse(any(e["type"] == "mic" for e in socket.events))
+        finally:
+            await live.close()
+
     def session(self, **options):
         settings = Settings(aec_enabled=False, **options)
         socket = Socket()

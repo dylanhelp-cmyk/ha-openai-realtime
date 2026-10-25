@@ -437,6 +437,10 @@ class LiveSession:
                 task = asyncio.create_task(self._complete_tools(calls))
                 self.tool_tasks.add(task)
                 task.add_done_callback(self.tool_tasks.discard)
+            elif self.s.silent_action_success and not self.output.active:
+                # A silent success has no speech-end callback to clear thinking.
+                # Change LEDs only: never gate, clear, or reopen the microphone.
+                await self.device.set_phase("listening")
         elif kind in {"response.failed", "response.incomplete"}:
             if self.timing:
                 self.timing.backend_finished(
