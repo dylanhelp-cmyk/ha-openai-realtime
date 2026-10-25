@@ -2,6 +2,8 @@
 
 import audioop
 import math
+import time
+from collections import deque
 
 RATE = 24000
 FRAME_SAMPLES = 480
@@ -15,12 +17,23 @@ def dbfs(audio):
 
 
 class InputAudio:
-    def __init__(self, buffer_ms):
+    def __init__(self, buffer_ms, track_timing=False):
         self.data = bytearray()
         self.limit = buffer_ms * 48
         self.resampler = None
         self.odd = b""
         self.dropped = 0
+        self.track_timing = track_timing
+        self.arrivals = deque()
+        self.last_frame_residence_ms = None
+
+    def _consume_timing(self, count):
+        while count and self.arrivals:
+            size, arrived = self.arrivals.popleft()
+            used = min(count, size)
+            count -= used
+            if used < size:
+                self.arrivals.appendleft((size - used, arrived))
 
     def append(self, audio):
         audio = self.odd + audio
@@ -32,20 +45,30 @@ class InputAudio:
             audio, 2, 1, 16000, RATE, self.resampler
         )
         self.data.extend(converted)
+        if self.track_timing and converted:
+            self.arrivals.append((len(converted), time.monotonic()))
         if len(self.data) > self.limit:
             remove = (len(self.data) - self.limit + 1) // 2 * 2
             self.dropped += remove
             del self.data[:remove]
+            self._consume_timing(remove)
 
     def frame(self):
         data = bytes(self.data[:FRAME_BYTES])
+        self.last_frame_residence_ms = (
+            max(0, time.monotonic() - self.arrivals[0][1]) * 1000
+            if data and self.arrivals else None
+        )
         del self.data[:FRAME_BYTES]
+        self._consume_timing(len(data))
         return data + bytes(FRAME_BYTES - len(data))
 
     def clear(self):
         self.data.clear()
         self.odd = b""
         self.resampler = None
+        self.arrivals.clear()
+        self.last_frame_residence_ms = None
 
     def trim_startup_silence(self, threshold_db=-65, keep_ms=40):
         """Remove only a quiet prefix at readiness, keeping speech and pre-roll.
@@ -61,4 +84,5 @@ class InputAudio:
         keep = max(0, keep_ms // 20) * FRAME_BYTES
         remove = max(0, quiet - keep)
         del self.data[:remove]
+        self._consume_timing(remove)
         return remove / (RATE * 2) * 1000

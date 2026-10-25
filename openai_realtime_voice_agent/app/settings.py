@@ -91,6 +91,7 @@ class Settings:
     greeting_timeout_s: float = 8
     tool_timeout_s: float = 15
     log_transcripts: bool = False
+    turn_timing_diagnostic: bool = False
 
     def validate(self):
         if not self.openai_api_key:
@@ -213,6 +214,7 @@ class Settings:
             "playback_diagnostic_on_next_wake",
             "render_lead_diagnostic_on_next_wake",
             "airplay_encryption",
+            "turn_timing_diagnostic",
         ):
             if type(getattr(self, key)) is not bool:
                 raise ValueError(f"{key} must be true or false")

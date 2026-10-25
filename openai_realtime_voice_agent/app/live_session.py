@@ -13,6 +13,7 @@ import aiohttp
 from app.echo import EchoProcessor
 from app.output import SpeechOutput
 from app.pcm import InputAudio, dbfs
+from app.turn_timing import TurnTiming
 
 log = logging.getLogger(__name__)
 LIVE_URL = "wss://api.openai.com/v1/live/sessions"
@@ -36,7 +37,12 @@ class LiveSession:
             time.monotonic() if wake_started_at is None else wake_started_at
         )
         self.wake_id = device.wake_id
-        self.input = InputAudio(settings.input_buffer_ms)
+        self.input = InputAudio(settings.input_buffer_ms, settings.turn_timing_diagnostic)
+        self.timing = (
+            TurnTiming(settings, self.wake_id, self.wake_started_at)
+            if settings.turn_timing_diagnostic
+            else None
+        )
         self.echo = EchoProcessor(settings, device, calibration_store)
         self.ws = None
         self.ready = asyncio.Event()
@@ -67,6 +73,8 @@ class LiveSession:
             wake_started_at=self.wake_started_at,
         )
         self.output.on_reference = self.echo.reference
+        self.output.timing = self.timing
+        self.output.mic_queue_ms = lambda: len(self.input.data) / 48
 
     def session_config(self):
         greeting = (
@@ -134,7 +142,7 @@ class LiveSession:
                     self.ws = LiveWebRTC(
                         self.http,
                         self.s.openai_api_key,
-                        self.input.frame,
+                        self.input_frame,
                         self.receive_output_audio,
                         self.s.session_close_timeout_s,
                     )
@@ -301,6 +309,8 @@ class LiveSession:
     async def backend_event(self, event, delegation_id=None):
         kind = event.get("type")
         if kind == "response.created":
+            if self.timing:
+                self.timing.backend_started(event["response"]["id"], time.monotonic())
             self.responses.setdefault(event["response"]["id"], [])
             self.response_ids[delegation_id] = event["response"]["id"]
         elif (
@@ -324,6 +334,8 @@ class LiveSession:
             self.responses.setdefault(response_id, []).append(item)
         elif kind == "response.completed":
             response_id = event.get("response", {}).get("id")
+            if self.timing:
+                self.timing.backend_finished(response_id, time.monotonic(), "completed")
             calls = self.responses.pop(response_id, [])
             self.last_activity = time.monotonic()
             if calls:
@@ -331,6 +343,10 @@ class LiveSession:
                 self.tool_tasks.add(task)
                 task.add_done_callback(self.tool_tasks.discard)
         elif kind in {"response.failed", "response.incomplete"}:
+            if self.timing:
+                self.timing.backend_finished(
+                    event.get("response", {}).get("id"), time.monotonic(), kind
+                )
             await self.fail("The reasoning backend could not finish this request")
 
     async def _complete_tools(self, calls):
@@ -342,7 +358,12 @@ class LiveSession:
             except (TypeError, ValueError):
                 result = {"isError": True, "result": "Invalid tool arguments"}
             else:
-                result = await self.tools.call(item.get("name", ""), arguments)
+                tool_started_at = time.monotonic()
+                try:
+                    result = await self.tools.call(item.get("name", ""), arguments)
+                finally:
+                    if self.timing:
+                        self.timing.tool_finished(tool_started_at, time.monotonic())
             if not self.closed:
                 await self.send(
                     {
@@ -372,15 +393,33 @@ class LiveSession:
             return
         audio = self.echo.process(audio)
         self.input.append(audio)
+        if self.timing:
+            self.timing.input_received(
+                audio, time.monotonic(), len(self.input.data) / 48, self.input.dropped
+            )
         even = audio[: len(audio) // 2 * 2]
         if dbfs(even) > self.s.input_activity_threshold_db:
             self.last_activity = self.last_user_voice = time.monotonic()
+
+    def input_frame(self):
+        queued_ms = len(self.input.data) / 48
+        audio = self.input.frame()
+        if self.timing:
+            self.timing.input_dequeued(
+                audio,
+                time.monotonic(),
+                self.input.last_frame_residence_ms,
+                queued_ms,
+                self.input.dropped,
+                len(self.output.frames) * 20,
+            )
+        return audio
 
     async def _input_pump(self):
         deadline = time.monotonic()
         try:
             while not self.closed:
-                audio = self.input.frame()
+                audio = self.input_frame()
                 await self.send(
                     {
                         "type": "session.input_audio.append",

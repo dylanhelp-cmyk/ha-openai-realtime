@@ -1,4 +1,7 @@
 configuration:
+  turn_timing_diagnostic:
+    name: Log conversation timing diagnostic
+    description: Log backend mic queue residence, level-based speech/pause estimates, reply queue wait and backend/tool timings. No audio or transcript text is recorded by this diagnostic. Does not change audio or turn-taking; handoff is not audible playback.
   live_transport:
     name: GPT-Live audio transport
     description: websocket preserves the current transport; webrtc tests the same GPT-Live model over negotiated real-time media. One paid session per wake; no automatic paid comparison. Keep output settings fixed when comparing.

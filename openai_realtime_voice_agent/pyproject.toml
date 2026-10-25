@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "home-assistant-gpt-live"
-version = "1.4.1"
+version = "1.4.2"
 description = "Wake-triggered GPT-Live voice and Home Assistant tools"
 requires-python = ">=3.11,<3.14"
 dependencies = ["aiohttp>=3.12,<4", "mcp>=1.30,<2", "numpy>=1.26,<3", "aiortc>=1.14,<2", "audioop-lts>=0.2; python_version>='3.13'"]

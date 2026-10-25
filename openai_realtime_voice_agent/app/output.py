@@ -59,6 +59,8 @@ class SpeechOutput:
         self.first_speech_queued_at = None
         self.first_speech_sent = False
         self.on_reference = None
+        self.timing = None
+        self.mic_queue_ms = lambda: 0
         self.worker = asyncio.create_task(self._run())
 
     @property
@@ -76,7 +78,18 @@ class SpeechOutput:
             loud = dbfs(frame) > self.s.output_silence_threshold_db
             if loud and self.first_speech_queued_at is None:
                 self.first_speech_queued_at = time.monotonic()
-            self.frames.append((frame, loud))
+            marker = (
+                self.timing.output_received(
+                    loud,
+                    time.monotonic(),
+                    len(self.frames) * 20,
+                    self.mic_queue_ms(),
+                    self.pending_speech * 20,
+                )
+                if self.timing
+                else None
+            )
+            self.frames.append((frame, loud, marker))
             self.pending_speech += int(loud)
         limit = max(1, self.s.output_buffer_ms // 20)
         # A network burst of silence can be shortened. Never silently discard
@@ -240,10 +253,10 @@ class SpeechOutput:
                 # Retain the greeting until the player has actually fetched.
                 available = not self.encoder or self.encoder.resource.fetched.is_set()
                 if available and self.frames:
-                    frame, loud = self.frames.popleft()
+                    frame, loud, marker = self.frames.popleft()
                     self.pending_speech -= int(loud)
                 else:
-                    frame, loud = SILENCE, False
+                    frame, loud, marker = SILENCE, False, None
                 await self._activity(loud)
                 if self.on_reference:
                     self.on_reference(frame, time.monotonic())
@@ -253,6 +266,8 @@ class SpeechOutput:
                     await self.encoder.write(frame)
                 else:
                     await self.device.audio(frame)
+                if marker is not None:
+                    self.timing.output_handed(marker, time.monotonic())
                 if loud and not self.first_speech_sent:
                     self.first_speech_sent = True
                     sent_at = time.monotonic()
