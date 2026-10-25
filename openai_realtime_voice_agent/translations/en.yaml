@@ -1,4 +1,10 @@
 configuration:
+  wake_cue_enabled:
+    name: Cached local Yes sir wake acknowledgment
+    description: Play Yes sir? through the Voice PE speaker while cloud startup runs. First enable or a voice change prepares one short PAID Live session and caches assistant audio in /data. No generation per wake. Wait for the cache-ready log before testing. Cloud readiness by cue end is not guaranteed; opening speech is buffered. Cached cue suppresses the cloud greeting.
+  silent_action_success:
+    name: Silent successful device commands
+    description: Prompt both models to omit action acknowledgments, progress filler and success confirmations. Still report failures, uncertainty, required approvals and clarifications; answer questions normally. This is a model instruction, not a hard audio mute.
   input_backlog_recovery:
     name: Recover microphone backlog during quiet
     description: Shorten a queued non-speech prefix using conservative local VAD, a level guard and 100 ms pre-roll. Keeps protected speech at normal speed. Does not control GPT turn-taking or change speaker/AEC timing. Disable for comparison with the old queue behaviour.
@@ -32,7 +38,7 @@ configuration:
     description: Language used for the opening greeting before the user has spoken, for example English.
   openai_voice:
     name: Live voice
-    description: A supported GPT-Live voice name, for example cedar, marin or quartz. Takes effect on
+    description: A supported GPT-Live voice name, for example vesper, marin or quartz. Takes effect on
       the next conversation.
   backend_model:
     name: Reasoning backend model

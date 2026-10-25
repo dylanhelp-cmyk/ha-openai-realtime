@@ -1,4 +1,4 @@
-"""GPT-Live Home Assistant voice bridge. No paid connection while the device rests."""
+"""Wake-triggered voice bridge, with optional one-off cached cue preparation."""
 
 import asyncio
 import json
@@ -18,6 +18,7 @@ from app.mcp_tools import HomeTools
 from app.playback_diagnostic import PlaybackDiagnosticSession
 from app.render_lead_diagnostic import RenderLeadDiagnosticSession
 from app.settings import Settings
+from app.wake_cue import WakeCueCache
 
 log = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ class VoiceBridge:
         self.devices = set()
         self.sessions = set()
         self.owner = None
+        self.wake_cue = None
         self.calibration_store = CalibrationStore()
         self.calibration_pending = settings.aec_calibrate_on_next_wake
         self.diagnostic_pending = settings.playback_diagnostic_on_next_wake
@@ -41,6 +43,19 @@ class VoiceBridge:
         self.http = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=15, connect=5)
         )
+        if self.s.wake_cue_enabled:
+            self.wake_cue = WakeCueCache(self.s, self.http)
+            if (
+                self.calibration_pending
+                or self.diagnostic_pending
+                or self.render_lead_pending
+            ):
+                self.wake_cue.load()
+                log.info(
+                    "Wake cue generation deferred: a no-OpenAI diagnostic is armed; disable diagnostic flags and restart to prepare a missing cue"
+                )
+            else:
+                self.wake_cue.task = asyncio.create_task(self.wake_cue.prepare())
         self.tools = HomeTools(
             self.s, self.s.longlived_token if self.s.ha_mcp_url else self.token
         )
@@ -60,7 +75,7 @@ class VoiceBridge:
             await self.server.start()
             log.info("Speech HTTP listening on port %d", self.server.port)
         log.info(
-            "GPT-Live ready on device port %d; OpenAI stays disconnected until wake",
+            "GPT-Live ready on device port %d; conversation sessions start on wake (cue cache preparation, if enabled, is separate)",
             self.s.websocket_port,
         )
 
@@ -163,6 +178,13 @@ class VoiceBridge:
                             self.calibration_store,
                         )
                     else:
+                        if self.s.wake_cue_enabled and not (
+                            self.wake_cue and self.wake_cue.audio
+                        ):
+                            log.warning(
+                                "Wake cue cache unavailable for wake=%d; conversation starts without cached acknowledgment (no per-wake generation retry)",
+                                device.wake_id,
+                            )
                         session = LiveSession(
                             self.s,
                             device,
@@ -172,6 +194,7 @@ class VoiceBridge:
                             self.token,
                             calibration_store=self.calibration_store,
                             wake_started_at=wake_started_at,
+                            wake_cue=self.wake_cue.audio if self.wake_cue else None,
                         )
                     self.sessions.add(session)
                     runner = asyncio.create_task(session.run())
@@ -194,6 +217,8 @@ class VoiceBridge:
         return ws
 
     async def close(self, app):
+        if self.wake_cue:
+            await self.wake_cue.close()
         await asyncio.gather(
             *(s.close() for s in list(self.sessions)), return_exceptions=True
         )

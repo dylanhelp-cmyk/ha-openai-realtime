@@ -32,9 +32,11 @@ class Settings:
     backend_instructions: str = BACKEND_PROMPT
     opening_greeting: str = "Yes, how can I help?"
     greeting_language: str = "English"
-    openai_voice: str = "cedar"
+    openai_voice: str = "vesper"
+    wake_cue_enabled: bool = False
+    silent_action_success: bool = True
     backend_model: str = "gpt-6-luna"
-    backend_reasoning_effort: str = "low"
+    backend_reasoning_effort: str = "none"
     backend_max_output_tokens: int = 1024
     backend_parallel_tools: bool = False
     enable_web_search: bool = True
@@ -217,6 +219,8 @@ class Settings:
             "airplay_encryption",
             "turn_timing_diagnostic",
             "input_backlog_recovery",
+            "wake_cue_enabled",
+            "silent_action_success",
         ):
             if type(getattr(self, key)) is not bool:
                 raise ValueError(f"{key} must be true or false")

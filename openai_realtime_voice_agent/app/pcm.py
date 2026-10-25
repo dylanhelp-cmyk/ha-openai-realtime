@@ -22,6 +22,7 @@ class InputAudio:
     ):
         self.data = bytearray()
         self.limit = buffer_ms * 48
+        self.pending_limit = None
         self.resampler = None
         self.odd = b""
         self.dropped = 0
@@ -45,6 +46,16 @@ class InputAudio:
             count -= used
             if used < size:
                 self.arrivals.appendleft((size - used, arrived))
+
+    def limit_when_drained(self, buffer_ms):
+        """Return to the steady limit without throwing away startup speech."""
+        self.pending_limit = buffer_ms * 48
+        self._shrink_limit()
+
+    def _shrink_limit(self):
+        if self.pending_limit is not None and len(self.data) <= self.pending_limit:
+            self.limit = self.pending_limit
+            self.pending_limit = None
 
     def append(self, audio):
         audio = self.odd + audio
@@ -75,6 +86,7 @@ class InputAudio:
         )
         del self.data[:FRAME_BYTES]
         self._consume_timing(len(data))
+        self._shrink_limit()
         return data + bytes(FRAME_BYTES - len(data))
 
     def clear(self):
@@ -83,6 +95,7 @@ class InputAudio:
         self.resampler = None
         self.arrivals.clear()
         self.last_frame_residence_ms = None
+        self._shrink_limit()
         if self.recovery:
             self.recovery.reset()
 
@@ -95,6 +108,7 @@ class InputAudio:
             self._consume_timing(remove)
         removed_ms = remove / 48
         self.quiet_removed_ms += removed_ms
+        self._shrink_limit()
         return removed_ms
 
     def trim_startup_silence(self, threshold_db=-65, keep_ms=40):

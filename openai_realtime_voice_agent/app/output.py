@@ -28,6 +28,7 @@ class SpeechOutput:
         token,
         *,
         wake_started_at=None,
+        local_cue_done=None,
     ):
         self.s, self.device, self.http, self.server = (
             settings,
@@ -36,6 +37,7 @@ class SpeechOutput:
             audio_server,
         )
         self.on_start, self.on_end, self.on_error = on_start, on_end, on_error
+        self.local_cue_done = local_cue_done
         self.token = token
         self.frames = deque()
         self.buffer = bytearray()
@@ -229,6 +231,8 @@ class SpeechOutput:
                     return
                 self.playback = asyncio.create_task(self._external())
             else:
+                if self.local_cue_done:
+                    await self.local_cue_done.wait()
                 self.ready.set()
             deadline = time.monotonic()
             while not self.closed:
@@ -251,7 +255,9 @@ class SpeechOutput:
                         raise RuntimeError("Conversation speaker disconnected")
                 # Warm the external player with silence immediately at wake.
                 # Retain the greeting until the player has actually fetched.
-                available = not self.encoder or self.encoder.resource.fetched.is_set()
+                available = (
+                    not self.encoder or self.encoder.resource.fetched.is_set()
+                ) and (not self.local_cue_done or self.local_cue_done.is_set())
                 if available and self.frames:
                     frame, loud, marker = self.frames.popleft()
                     self.pending_speech -= int(loud)
