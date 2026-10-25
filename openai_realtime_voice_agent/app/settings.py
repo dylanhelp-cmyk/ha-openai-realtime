@@ -69,6 +69,7 @@ class Settings:
     output_silence_threshold_db: float = -55
     input_activity_threshold_db: float = -42
     input_buffer_ms: int = 600
+    input_backlog_recovery: bool = True
     aec_enabled: bool = True
     aec_delay_ms: float = -1.0
     aec_auto_delay: bool = True
@@ -215,6 +216,7 @@ class Settings:
             "render_lead_diagnostic_on_next_wake",
             "airplay_encryption",
             "turn_timing_diagnostic",
+            "input_backlog_recovery",
         ):
             if type(getattr(self, key)) is not bool:
                 raise ValueError(f"{key} must be true or false")

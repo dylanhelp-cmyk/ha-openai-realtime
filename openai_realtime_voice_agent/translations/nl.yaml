@@ -1,4 +1,7 @@
 configuration:
+  input_backlog_recovery:
+    name: Microfoonachterstand bij stilte inhalen
+    description: Verkort alleen een beschermd beoordeeld niet-spraaksegment vooraan de wachtrij met lokale VAD, niveaucontrole en 100 ms voorloop. Versnelt spraak niet en verandert GPT-beurtwisseling of luidspreker/AEC-timing niet. Uitschakelen herstelt het oude wachtrijgedrag.
   turn_timing_diagnostic:
     name: Gesprekstiming diagnosticeren
     description: Logt wachttijden van microfoonaudio, geschatte spraakpauzes, antwoordaudio en backend/tools. Deze diagnose slaat geen audio of transcripttekst op en verandert de audiostroom niet. Overdracht is geen hoorbare weergave.

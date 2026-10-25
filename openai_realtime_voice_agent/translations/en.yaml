@@ -1,4 +1,7 @@
 configuration:
+  input_backlog_recovery:
+    name: Recover microphone backlog during quiet
+    description: Shorten a queued non-speech prefix using conservative local VAD, a level guard and 100 ms pre-roll. Keeps protected speech at normal speed. Does not control GPT turn-taking or change speaker/AEC timing. Disable for comparison with the old queue behaviour.
   turn_timing_diagnostic:
     name: Log conversation timing diagnostic
     description: Log backend mic queue residence, level-based speech/pause estimates, reply queue wait and backend/tool timings. No audio or transcript text is recorded by this diagnostic. Does not change audio or turn-taking; handoff is not audible playback.

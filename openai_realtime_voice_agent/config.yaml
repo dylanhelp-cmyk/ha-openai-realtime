@@ -1,5 +1,5 @@
 name: GPT-Live Voice Agent (Dylan fork)
-version: "1.4.2"
+version: "1.4.3"
 slug: openai_realtime_voice_agent
 description: Greeting-first GPT-Live conversations, Home Assistant control and streaming speaker output.
 url: https://github.com/dylanhelp-cmyk/ha-openai-realtime
@@ -85,6 +85,7 @@ options:
   output_silence_threshold_db: -55
   input_activity_threshold_db: -42
   input_buffer_ms: 600
+  input_backlog_recovery: true
   idle_timeout_seconds: 15
   max_session_seconds: 180
   session_start_timeout_s: 12
@@ -110,6 +111,7 @@ options:
   aec_calibration_min_confidence: 0.35
   aec_calibration_level: 0.15
 schema:
+  input_backlog_recovery: bool
   turn_timing_diagnostic: bool
   openai_api_key: password
   instructions: str

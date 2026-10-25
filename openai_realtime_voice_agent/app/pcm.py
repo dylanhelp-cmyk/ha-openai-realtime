@@ -17,7 +17,9 @@ def dbfs(audio):
 
 
 class InputAudio:
-    def __init__(self, buffer_ms, track_timing=False):
+    def __init__(
+        self, buffer_ms, track_timing=False, recover_backlog=False, level_guard_db=-42
+    ):
         self.data = bytearray()
         self.limit = buffer_ms * 48
         self.resampler = None
@@ -26,8 +28,17 @@ class InputAudio:
         self.track_timing = track_timing
         self.arrivals = deque()
         self.last_frame_residence_ms = None
+        self.quiet_removed_ms = 0
+        self.recovery = None
+        if recover_backlog:
+            # Lazy import keeps the plain PCM buffer independent of VAD.
+            from app.input_recovery import InputRecovery
+
+            self.recovery = InputRecovery(level_guard_db)
 
     def _consume_timing(self, count):
+        if self.recovery:
+            self.recovery.consume(count)
         while count and self.arrivals:
             size, arrived = self.arrivals.popleft()
             used = min(count, size)
@@ -45,6 +56,8 @@ class InputAudio:
             audio, 2, 1, 16000, RATE, self.resampler
         )
         self.data.extend(converted)
+        if self.recovery:
+            self.recovery.append(converted)
         if self.track_timing and converted:
             self.arrivals.append((len(converted), time.monotonic()))
         if len(self.data) > self.limit:
@@ -57,7 +70,8 @@ class InputAudio:
         data = bytes(self.data[:FRAME_BYTES])
         self.last_frame_residence_ms = (
             max(0, time.monotonic() - self.arrivals[0][1]) * 1000
-            if data and self.arrivals else None
+            if data and self.arrivals
+            else None
         )
         del self.data[:FRAME_BYTES]
         self._consume_timing(len(data))
@@ -69,6 +83,19 @@ class InputAudio:
         self.resampler = None
         self.arrivals.clear()
         self.last_frame_residence_ms = None
+        if self.recovery:
+            self.recovery.reset()
+
+    def recover_backlog(self):
+        if not self.recovery:
+            return 0
+        remove = self.recovery.removable_prefix(len(self.data))
+        if remove:
+            del self.data[:remove]
+            self._consume_timing(remove)
+        removed_ms = remove / 48
+        self.quiet_removed_ms += removed_ms
+        return removed_ms
 
     def trim_startup_silence(self, threshold_db=-65, keep_ms=40):
         """Remove only a quiet prefix at readiness, keeping speech and pre-roll.

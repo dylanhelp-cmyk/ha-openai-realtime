@@ -37,7 +37,12 @@ class LiveSession:
             time.monotonic() if wake_started_at is None else wake_started_at
         )
         self.wake_id = device.wake_id
-        self.input = InputAudio(settings.input_buffer_ms, settings.turn_timing_diagnostic)
+        self.input = InputAudio(
+            settings.input_buffer_ms,
+            settings.turn_timing_diagnostic,
+            settings.input_backlog_recovery,
+            settings.input_activity_threshold_db,
+        )
         self.timing = (
             TurnTiming(settings, self.wake_id, self.wake_started_at)
             if settings.turn_timing_diagnostic
@@ -189,9 +194,13 @@ class LiveSession:
                     raise RuntimeError(
                         "Live session rejected; check API access, voice and backend model"
                     )
-            trimmed = self.input.trim_startup_silence()
+            trimmed = (
+                self.recover_input_backlog()
+                if self.s.input_backlog_recovery
+                else self.input.trim_startup_silence()
+            )
             log.info(
-                "GPT-Live input startup backlog: transport=%s, trimmed_silence=%.0f ms, retained=%.0f ms (speech preserved)",
+                "GPT-Live input startup backlog: transport=%s, trimmed_non_speech=%.0f ms, retained=%.0f ms (protected speech retained)",
                 self.s.live_transport,
                 trimmed,
                 len(self.input.data) / 48,
@@ -401,7 +410,25 @@ class LiveSession:
         if dbfs(even) > self.s.input_activity_threshold_db:
             self.last_activity = self.last_user_voice = time.monotonic()
 
+    def recover_input_backlog(self):
+        before_ms = len(self.input.data) / 48
+        removed_ms = self.input.recover_backlog()
+        if removed_ms:
+            log.info(
+                "Microphone backlog recovery: wake=%d removed_quiet_ms=%.0f "
+                "queued_before_ms=%.0f retained_ms=%.0f total_quiet_removed_ms=%.0f "
+                "(VAD mode=0, level guard, 100 ms preroll; speech not accelerated)",
+                self.wake_id,
+                removed_ms,
+                before_ms,
+                len(self.input.data) / 48,
+                self.input.quiet_removed_ms,
+            )
+        return removed_ms
+
     def input_frame(self):
+        if self.s.input_backlog_recovery:
+            self.recover_input_backlog()
         queued_ms = len(self.input.data) / 48
         audio = self.input.frame()
         if self.timing:
